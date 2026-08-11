@@ -1,0 +1,6 @@
+@OtakuScore.api_HostAddress = http://localhost:5094
+
+GET {{OtakuScore.api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
