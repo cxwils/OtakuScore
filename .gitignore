@@ -1,0 +1,6 @@
+.vs/
+OtakuScore.api/bin/
+OtakuScore.api/obj/
+OtakuScore.api/appsettings.Development.json
+anime-rater-web/node_modules/
+anime-rater-web/dist/
