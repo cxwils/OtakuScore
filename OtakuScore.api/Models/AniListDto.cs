@@ -19,8 +19,11 @@ namespace OtakuScore.api.Models
 		[JsonPropertyName("media")]
 		public List<AniListMedia> Media { get; set; } = new();
 	}
+
     public class AniListMedia
     {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
         [JsonPropertyName("title")]
         public AniListTitle Title { get; set; } = new();
         [JsonPropertyName("description")]
@@ -34,6 +37,7 @@ namespace OtakuScore.api.Models
         [JsonPropertyName("popularity")]
         public int? Popularity { get; set; }
     }
+
     public class AniListCoverImage
     {
         [JsonPropertyName("large")]

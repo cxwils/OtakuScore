@@ -3,7 +3,7 @@ import './App.css';
 import AnimeDetail from './AnimeDetail.jsx';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 
-const TABS = ['Anime', 'Manga', 'Characters', 'Anime of the Week'];
+const TABS = ['Anime', 'Manga', 'Characters', 'Anime of the Week', 'My List'];
 
 function App() {
     const navigate = useNavigate();
@@ -15,22 +15,39 @@ function App() {
     const [hottestList, setHottestList] = useState([]);
     const [hottestLoading, setHottestLoading] = useState(true);
     const [hottestError, setHottestError] = useState(null);
+    const [watchlist, setWatchlist] = useState([]);
+    const [watchlistLoading, setWatchlistLoading] = useState(true);
+    const [watchlistError, setWatchlistError] = useState(null);
+    const [animePage, setAnimePage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+
+    const handleRemoveFromWatchlist = (animeId) => {
+        fetch(`http://localhost:5094/api/watchlist/${animeId}`, {
+            method: 'DELETE',
+        })
+            .then((res) => {
+                if (!res.ok) throw new Error('Failed to remove from watchlist');
+                setWatchlist((prev) => prev.filter((entry) => entry.animeId !== animeId));
+            })
+            .catch((err) => console.error(err));
+    };
 
     useEffect(() => {
-        fetch('http://localhost:5094/api/anime')
+        fetch(`http://localhost:5094/api/anime?page=${animePage}&pageSize=25`)
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch anime');
                 return response.json();
             })
             .then((data) => {
-                setAnimeList(data);
+                setAnimeList(data.items);
+                setTotalPages(data.totalPages);
                 setLoading(false);
             })
             .catch((err) => {
                 setError(err.message);
                 setLoading(false);
             });
-    }, []);
+    }, [animePage]);
 
     useEffect(() => {
         fetch('http://localhost:5094/api/anime/hottest')
@@ -51,6 +68,36 @@ function App() {
     useEffect(() => {
         document.body.classList.toggle('light-mode', !darkMode);
     }, [darkMode]);
+
+    useEffect(() => {
+        fetch('http://localhost:5094/api/watchlist')
+            .then((response) => {
+                if (!response.ok) throw new Error('Failed to fetch watchlist');
+                return response.json();
+            })
+            .then((data) => {
+                setWatchlist(data);
+                setWatchlistLoading(false);
+            })
+            .catch((err) => {
+                setWatchlistError(err.message);
+                setWatchlistLoading(false);
+            });
+    }, [activeTab]);
+
+    const handleHottestClick = (anilistId) => {
+        fetch(`http://localhost:5094/api/anime/import-one/${anilistId}`, {
+            method: 'POST',
+        })
+            .then((res) => {
+                if (!res.ok) throw new Error('Failed to import anime');
+                return res.json();
+            })
+            .then((data) => {
+                navigate(`/anime/${data.id}`);
+            })
+            .catch((err) => console.error(err));
+    };
 
     return (
         <div>
@@ -120,32 +167,12 @@ function App() {
                                     {hottestError && <p className="status-message error">Error: {hottestError}</p>}
                                     {!hottestLoading && !hottestError && (
                                         <div className="anime-grid">
-                                            {hottestList.map((anime, index) => (
-                                                <article key={index} className="anime-card">
-                                                    {anime.imageUrl && (
-                                                        <img src={anime.imageUrl} alt={anime.title} className="anime-poster" />
-                                                    )}
-                                                    <div className="card-top">
-                                                        <h2>{anime.title}</h2>
-                                                        <span className="seal">{anime.aniListScore ?? '—'}</span>
-                                                    </div>
-                                                    <p className="genre-tag">{anime.genre}</p>
-                                                    <p className="summary">{anime.summary}</p>
-                                                </article>
-                                            ))}
-                                        </div>
-                                    )}
-                                </>
-                            )}
-
-                            {activeTab === 'Anime' && (
-                                <>
-                                    {loading && <p className="status-message">Loading library…</p>}
-                                    {error && <p className="status-message error">Error: {error}</p>}
-                                    {!loading && !error && (
-                                        <div className="anime-grid">
-                                            {animeList.map((anime) => (
-                                                <Link to={`/anime/${anime.id}`} key={anime.id} className="card-link">
+                                            {hottestList.map((anime) => (
+                                                <div
+                                                    key={anime.anilistId}
+                                                    className="card-link"
+                                                    onClick={() => handleHottestClick(anime.anilistId)}
+                                                >
                                                     <article className="anime-card">
                                                         {anime.imageUrl && (
                                                             <img src={anime.imageUrl} alt={anime.title} className="anime-poster" />
@@ -157,7 +184,90 @@ function App() {
                                                         <p className="genre-tag">{anime.genre}</p>
                                                         <p className="summary">{anime.summary}</p>
                                                     </article>
-                                                </Link>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {activeTab === 'Anime' && (
+                                <>
+                                    {loading && <p className="status-message">Loading library…</p>}
+                                    {error && <p className="status-message error">Error: {error}</p>}
+                                    {!loading && !error && (
+                                        <>
+                                            <div className="anime-grid">
+                                                {animeList.map((anime) => (
+                                                    <Link to={`/anime/${anime.id}`} key={anime.id} className="card-link">
+                                                        <article className="anime-card">
+                                                            {anime.imageUrl && (
+                                                                <img src={anime.imageUrl} alt={anime.title} className="anime-poster" />
+                                                            )}
+                                                            <div className="card-top">
+                                                                <h2>{anime.title}</h2>
+                                                                <span className="seal">{anime.aniListScore ?? '—'}</span>
+                                                            </div>
+                                                            <p className="genre-tag">{anime.genre}</p>
+                                                            <p className="summary">{anime.summary}</p>
+                                                        </article>
+                                                    </Link>
+                                                ))}
+                                            </div>
+
+                                            {totalPages > 1 && (
+                                                <div className="pagination">
+                                                    <button
+                                                        onClick={() => setAnimePage((p) => Math.max(1, p - 1))}
+                                                        disabled={animePage === 1}
+                                                    >
+                                                        Previous
+                                                    </button>
+                                                    <span>Page {animePage} of {totalPages}</span>
+                                                    <button
+                                                        onClick={() => setAnimePage((p) => Math.min(totalPages, p + 1))}
+                                                        disabled={animePage === totalPages}
+                                                    >
+                                                        Next
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
+                                </>
+                            )}
+
+                            {activeTab === 'My List' && (
+                                <>
+                                    {watchlistLoading && <p className="status-message">Loading your list…</p>}
+                                    {watchlistError && <p className="status-message error">Error: {watchlistError}</p>}
+                                    {!watchlistLoading && !watchlistError && watchlist.length === 0 && (
+                                        <p className="status-message">Your list is empty! Add anime from their detail page.</p>
+                                    )}
+                                    {!watchlistLoading && !watchlistError && watchlist.length > 0 && (
+                                        <div className="anime-grid">
+                                            {watchlist.map((entry) => (
+                                                <article className="anime-card" key={entry.id}>
+                                                    <Link to={`/anime/${entry.anime.id}`} className="card-link">
+                                                        {entry.anime.imageUrl && (
+                                                            <img src={entry.anime.imageUrl} alt={entry.anime.title} className="anime-poster" />
+                                                        )}
+                                                        <div className="card-top">
+                                                            <h2>{entry.anime.title}</h2>
+                                                            <span className="status-badge">{entry.status}</span>
+                                                        </div>
+                                                        <p className="genre-tag">{entry.anime.genre}</p>
+                                                    </Link>
+                                                    <button
+                                                        className="remove-button"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            handleRemoveFromWatchlist(entry.animeId);
+                                                        }}
+                                                    >
+                                                        Remove
+                                                    </button>
+                                                </article>
                                             ))}
                                         </div>
                                     )}

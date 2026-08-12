@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OtakuScore.api.Data;
 using OtakuScore.api.Models;
+using System.Text.Json;
 
 static string StripHtml(string input)
 {
@@ -43,9 +44,24 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapGet("/api/anime", async (AppDbContext db) =>
+app.MapGet("/api/anime", async (AppDbContext db, int page = 1, int pageSize = 25) =>
 {
-    return await db.Anime.ToListAsync();
+    var totalCount = await db.Anime.CountAsync();
+
+    var items = await db.Anime
+        .OrderBy(a => a.Id)
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .ToListAsync();
+
+    return Results.Ok(new
+    {
+        items,
+        page,
+        pageSize,
+        totalCount,
+        totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+    });
 })
 .WithName("GetAllAnime");
 
@@ -99,62 +115,70 @@ app.MapDelete("/api/anime/{id}", async (AppDbContext db, int id) =>
 })
 .WithName("DeleteAnime");
 
-app.MapPost("/api/anime/import", async (AppDbContext db, IHttpClientFactory httpClientFactory) =>
+app.MapPost("/api/anime/import", async (AppDbContext db, IHttpClientFactory httpClientFactory, int pages = 5, int perPage = 25) =>
 {
     var client = httpClientFactory.CreateClient("AniList");
-
-    var query = @"
-    query {
-        Page(perPage: 10) {
-            media(type: ANIME, sort: POPULARITY_DESC) {
-                title { romaji }
-                description
-                genres
-                coverImage { large }
-                averageScore
-                popularity
-            }
-        }
-    }";
-
-
-
-    var requestBody = new { query };
-    var httpResponse = await client.PostAsJsonAsync("", requestBody);
-    httpResponse.EnsureSuccessStatusCode();
-
-    var response = await httpResponse.Content.ReadFromJsonAsync<AniListResponse>();
-
-    if (response is null || response.Data.Page.Media.Count == 0)
-    {
-        return Results.Problem("No data returned from AniList.");
-    }
-
     int addedCount = 0;
 
-    foreach (var item in response.Data.Page.Media)
+    for (int page = 1; page <= pages; page++)
     {
-        bool exists = await db.Anime.AnyAsync(a => a.Title == item.Title.Romaji);
-        if (exists)
+        var query = @"
+            query ($page: Int, $perPage: Int) {
+                Page(page: $page, perPage: $perPage) {
+                    media(type: ANIME, sort: POPULARITY_DESC) {
+                        title { romaji }
+                        description
+                        genres
+                        coverImage { large }
+                        averageScore
+                        popularity
+                    }
+                }
+            }";
+
+        var requestBody = new { query, variables = new { page, perPage } };
+        var httpResponse = await client.PostAsJsonAsync("", requestBody);
+
+        if (!httpResponse.IsSuccessStatusCode)
         {
-            continue;
+            break;
         }
 
-        var anime = new Anime
-        {
-            Title = item.Title.Romaji,
-            Genre = string.Join(", ", item.Genres),
-            Summary = item.Description != null ? StripHtml(item.Description) : "No summary available.",
-            ImageUrl = item.CoverImage.Large,
-            AniListScore = item.AverageScore,
-            Popularity = item.Popularity
-        };
+        var response = await httpResponse.Content.ReadFromJsonAsync<AniListResponse>();
 
-        db.Anime.Add(anime);
-        addedCount++;
+        if (response is null || response.Data.Page.Media.Count == 0)
+        {
+            break;
+        }
+
+        foreach (var item in response.Data.Page.Media)
+        {
+            bool exists = await db.Anime.AnyAsync(a => a.Title == item.Title.Romaji);
+            if (exists)
+            {
+                continue;
+            }
+
+            var anime = new Anime
+            {
+                Title = item.Title.Romaji,
+                Genre = string.Join(", ", item.Genres),
+                Summary = item.Description != null ? StripHtml(item.Description) : "No summary available.",
+                ImageUrl = item.CoverImage.Large,
+                AniListScore = item.AverageScore,
+                Popularity = item.Popularity
+            };
+
+            db.Anime.Add(anime);
+            addedCount++;
+        }
+
+        await db.SaveChangesAsync();
+
+        // Small delay to stay well within AniList's rate limits between pages
+        await Task.Delay(500);
     }
 
-    await db.SaveChangesAsync();
     return Results.Ok(new { imported = addedCount });
 })
 .WithName("ImportFromAniList");
@@ -220,18 +244,19 @@ app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
     var currentYear = DateTime.UtcNow.Year;
 
     var query = @"
-        query ($year: Int) {
-            Page(perPage: 25) {
-                media(type: ANIME, seasonYear: $year, sort: POPULARITY_DESC) {
-                    title { romaji }
-                    description
-                    genres
-                    coverImage { large }
-                    averageScore
-                    popularity
-                }
+    query ($year: Int) {
+        Page(perPage: 25) {
+            media(type: ANIME, seasonYear: $year, sort: POPULARITY_DESC) {
+                id
+                title { romaji }
+                description
+                genres
+                coverImage { large }
+                averageScore
+                popularity
             }
-        }";
+        }
+    }";
 
     var requestBody = new
     {
@@ -251,6 +276,7 @@ app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
 
     var hottestList = response.Data.Page.Media.Select(item => new
     {
+        anilistId = item.Id,
         title = item.Title.Romaji,
         genre = string.Join(", ", item.Genres),
         summary = item.Description != null ? StripHtml(item.Description) : "No summary available.",
@@ -262,6 +288,106 @@ app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
     return Results.Ok(hottestList);
 })
 .WithName("GetHottestAnimeOfYear");
+
+app.MapGet("/api/watchlist", async (AppDbContext db) =>
+{
+    return await db.WatchlistEntry.Include(w => w.Anime).ToListAsync();
+})
+.WithName("GetWatchlist");
+
+app.MapPost("/api/watchlist", async (AppDbContext db, WatchlistEntry entry) =>
+{
+    var animeExists = await db.Anime.AnyAsync(a => a.Id == entry.AnimeId);
+    if (!animeExists)
+    {
+        return Results.NotFound("Anime not found.");
+    }
+
+    var existing = await db.WatchlistEntry.FirstOrDefaultAsync(w => w.AnimeId == entry.AnimeId);
+    if (existing is not null)
+    {
+        existing.Status = entry.Status;
+        await db.SaveChangesAsync();
+        return Results.Ok(existing);
+    }
+
+    db.WatchlistEntry.Add(entry);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/watchlist/{entry.Id}", entry);
+})
+.WithName("AddOrUpdateWatchlistEntry");
+
+app.MapDelete("/api/watchlist/{animeId}", async (AppDbContext db, int animeId) =>
+{
+    var entry = await db.WatchlistEntry.FirstOrDefaultAsync(w => w.AnimeId == animeId);
+    if (entry is null)
+    {
+        return Results.NotFound();
+    }
+
+    db.WatchlistEntry.Remove(entry);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+})
+.WithName("RemoveFromWatchlist");
+
+app.MapPost("/api/anime/import-one/{anilistId}", async (AppDbContext db, IHttpClientFactory httpClientFactory, int anilistId) =>
+{
+    var client = httpClientFactory.CreateClient("AniList");
+
+    var query = @"
+    query ($id: Int) {
+        Media(id: $id, type: ANIME) {
+            title { romaji }
+            description
+            genres
+            coverImage { large }
+            averageScore
+            popularity
+        }
+    }";
+
+    var requestBody = new { query, variables = new { id = anilistId } };
+    var httpResponse = await client.PostAsJsonAsync("", requestBody);
+    httpResponse.EnsureSuccessStatusCode();
+
+    var json = await httpResponse.Content.ReadFromJsonAsync<JsonElement>();
+    var mediaElement = json.GetProperty("data").GetProperty("Media");
+
+    var title = mediaElement.GetProperty("title").GetProperty("romaji").GetString() ?? "Untitled";
+
+    var existing = await db.Anime.FirstOrDefaultAsync(a => a.Title == title);
+    if (existing is not null)
+    {
+        return Results.Ok(existing);
+    }
+
+    var genres = mediaElement.GetProperty("genres").EnumerateArray().Select(g => g.GetString()).ToList();
+    var description = mediaElement.TryGetProperty("description", out var descProp) ? descProp.GetString() : null;
+    var imageUrl = mediaElement.GetProperty("coverImage").GetProperty("large").GetString();
+    var averageScore = mediaElement.TryGetProperty("averageScore", out var scoreProp) && scoreProp.ValueKind != JsonValueKind.Null
+        ? scoreProp.GetInt32()
+        : (int?)null;
+    var popularity = mediaElement.TryGetProperty("popularity", out var popProp) && popProp.ValueKind != JsonValueKind.Null
+        ? popProp.GetInt32()
+        : (int?)null;
+
+    var anime = new Anime
+    {
+        Title = title,
+        Genre = string.Join(", ", genres),
+        Summary = description != null ? StripHtml(description) : "No summary available.",
+        ImageUrl = imageUrl,
+        AniListScore = averageScore,
+        Popularity = popularity
+    };
+
+    db.Anime.Add(anime);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(anime);
+})
+.WithName("ImportSingleAnime");
 
 app.Run();
 

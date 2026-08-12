@@ -9,5 +9,6 @@ namespace OtakuScore.api.Data
 
         public DbSet<Anime> Anime { get; set; }
         public DbSet<Rating> Rating { get; set; }
+        public DbSet<WatchlistEntry> WatchlistEntry { get; set; }
     }
 }
