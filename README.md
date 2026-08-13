@@ -1,6 +1,6 @@
 ﻿# Otaku Score
 
-A full-stack anime rating platform built with ASP.NET Core, PostgreSQL, and React. Users can browse anime, view detailed rating breakdowns across 8 categories, and see live "hottest of the year" rankings — with anime data sourced from the AniList GraphQL API.
+A full-stack anime rating platform built with ASP.NET Core, PostgreSQL, and React. Browse a searchable, filterable catalog of anime, view detailed rating breakdowns across 8 categories, explore cast and character pages, and track your own watchlist — with data sourced live from the AniList GraphQL API.
 
 ## Tech Stack
 
@@ -11,12 +11,15 @@ A full-stack anime rating platform built with ASP.NET Core, PostgreSQL, and Reac
 
 ## Features
 
-- Full CRUD API for anime (create, read, update, delete)
+- Full CRUD API for anime, with rich metadata (format, episodes, duration, status, season, studio)
 - Category-based rating system — Premise, Plot, Characters, Art Style, Animation, Pacing, Ending, and Binge-ability — with a computed overall score
 - Per-anime rating summary endpoint with per-category and overall averages
-- Automated data ingestion from AniList, with deduplication against existing records and HTML sanitization on descriptions
+- Search, genre filtering, and sorting (rating/title, asc/desc) on the anime catalog, with backend pagination
+- Cast and character data pulled from AniList, deduplicated across seasons/sequels, with individual character pages showing bio, voice actor, and every anime they appear in
+- Automated data ingestion from AniList (bulk and single-anime imports), with deduplication and HTML/markdown sanitization on descriptions
 - Live "Hottest Anime of the Year" endpoint querying AniList directly by current year and popularity
-- Single-anime detail pages with full rating breakdown, via client-side routing
+- Single-user Watchlist (Watching / Plan to Watch / Completed / Dropped) with add, update, and remove
+- Score-based color coding (green/gold/rose) on AniList community scores
 - Light/dark theme toggle
 - Interactive API documentation via Swagger UI
 
@@ -64,25 +67,6 @@ npm run dev
 
 The site will be available at `http://localhost:5173`.
 
-### API Endpoints
+### Seeding Data
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/anime` | List all anime |
-| GET | `/api/anime/{id}` | Get a single anime by ID |
-| POST | `/api/anime` | Create an anime |
-| PUT | `/api/anime/{id}` | Update an anime |
-| DELETE | `/api/anime/{id}` | Delete an anime |
-| POST | `/api/anime/import` | Import anime data from AniList |
-| GET | `/api/anime/hottest` | Get top 25 anime of the current year, live from AniList |
-| GET | `/api/anime/{animeId}/ratings` | Get ratings for an anime |
-| POST | `/api/anime/{animeId}/ratings` | Submit a category rating |
-| GET | `/api/anime/{animeId}/rating-summary` | Get per-category and overall average scores |
-
-## Project Status
-
-🚧 In active development. Rating submission UI in progress.
-
-## Author
-
-Christian Wilsey
+Once the backend is running, import anime from AniList via Swagger:
