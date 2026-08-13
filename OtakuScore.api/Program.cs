@@ -8,12 +8,23 @@ static string StripHtml(string input)
     return System.Text.RegularExpressions.Regex.Replace(input, "<.*?>", " ").Trim();
 }
 
+static string CleanCharacterDescription(string input)
+{
+    var noBold = System.Text.RegularExpressions.Regex.Replace(input, "__(.*?)__", "$1");
+    var noLinks = System.Text.RegularExpressions.Regex.Replace(noBold, @"\[([^\]]+)\]\([^\)]+\)", "$1");
+    return noLinks.Trim();
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+});
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -44,12 +55,32 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapGet("/api/anime", async (AppDbContext db, int page = 1, int pageSize = 25) =>
+app.MapGet("/api/anime", async (AppDbContext db, int page = 1, int pageSize = 25, string? search = null, string? genre = null, string? sort = null) =>
 {
-    var totalCount = await db.Anime.CountAsync();
+    var query = db.Anime.AsQueryable();
 
-    var items = await db.Anime
-        .OrderBy(a => a.Id)
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        query = query.Where(a => EF.Functions.ILike(a.Title, $"%{search}%"));
+    }
+
+    if (!string.IsNullOrWhiteSpace(genre))
+    {
+        query = query.Where(a => EF.Functions.ILike(a.Genre, $"%{genre}%"));
+    }
+
+    query = sort switch
+    {
+        "rating_desc" => query.OrderByDescending(a => a.AniListScore ?? 0),
+        "rating_asc" => query.OrderBy(a => a.AniListScore ?? 0),
+        "title_asc" => query.OrderBy(a => a.Title),
+        "title_desc" => query.OrderByDescending(a => a.Title),
+        _ => query.OrderBy(a => a.Id)
+    };
+
+    var totalCount = await query.CountAsync();
+
+    var items = await query
         .Skip((page - 1) * pageSize)
         .Take(pageSize)
         .ToListAsync();
@@ -65,9 +96,92 @@ app.MapGet("/api/anime", async (AppDbContext db, int page = 1, int pageSize = 25
 })
 .WithName("GetAllAnime");
 
+app.MapGet("/api/characters", async (AppDbContext db, int page = 1, int pageSize = 32, string? search = null) =>
+{
+    var query = db.CastMember.AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        query = query.Where(c =>
+            EF.Functions.ILike(c.CharacterName, $"%{search}%") ||
+            EF.Functions.ILike(c.VoiceActorName, $"%{search}%"));
+    }
+
+    var allMatching = await query
+        .OrderBy(c => c.Id)
+        .ToListAsync();
+
+    var deduped = allMatching
+        .GroupBy(c => c.AniListCharacterId)
+        .Select(g => g.First())
+        .ToList();
+
+    var totalCount = deduped.Count;
+
+    var items = deduped
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .Select(c => new
+        {
+            c.AniListCharacterId,
+            c.CharacterName,
+            c.CharacterImageUrl,
+            c.VoiceActorName
+        })
+        .ToList();
+
+    return Results.Ok(new
+    {
+        items,
+        page,
+        pageSize,
+        totalCount,
+        totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+    });
+})
+.WithName("GetAllCharacters");
+
+app.MapGet("/api/characters/{aniListCharacterId}", async (AppDbContext db, int aniListCharacterId) =>
+{
+    var appearances = await db.CastMember
+        .Include(c => c.Anime)
+        .Where(c => c.AniListCharacterId == aniListCharacterId)
+        .ToListAsync();
+
+    if (appearances.Count == 0)
+    {
+        return Results.NotFound();
+    }
+
+    var first = appearances.First();
+
+    var result = new
+    {
+        aniListCharacterId,
+        characterName = first.CharacterName,
+        characterImageUrl = first.CharacterImageUrl,
+        characterDescription = first.CharacterDescription,
+        voiceActorName = first.VoiceActorName,
+        animeAppearances = appearances
+            .Where(a => a.Anime != null)
+            .Select(a => new
+            {
+                animeId = a.AnimeId,
+                title = a.Anime!.Title,
+                imageUrl = a.Anime!.ImageUrl
+            })
+    };
+
+    return Results.Ok(result);
+})
+.WithName("GetCharacterById");
+
 app.MapGet("/api/anime/{id}", async (AppDbContext db, int id) =>
 {
-    var anime = await db.Anime.FindAsync(id);
+    var anime = await db.Anime
+        .Include(a => a.CastMembers)
+        .FirstOrDefaultAsync(a => a.Id == id);
+
     if (anime is null)
     {
         return Results.NotFound();
@@ -123,18 +237,38 @@ app.MapPost("/api/anime/import", async (AppDbContext db, IHttpClientFactory http
     for (int page = 1; page <= pages; page++)
     {
         var query = @"
-            query ($page: Int, $perPage: Int) {
-                Page(page: $page, perPage: $perPage) {
-                    media(type: ANIME, sort: POPULARITY_DESC) {
-                        title { romaji }
-                        description
-                        genres
-                        coverImage { large }
-                        averageScore
-                        popularity
+        query ($page: Int, $perPage: Int) {
+        Page(page: $page, perPage: $perPage) {
+            media(type: ANIME, sort: POPULARITY_DESC) {
+                title { romaji }
+                description
+                genres
+                coverImage { large }
+                averageScore
+                popularity
+                episodes
+                status
+                format
+                studios(isMain: true) { nodes { name } }
+                seasonYear
+                season
+                duration
+                characters(sort: ROLE, page: 1, perPage: 6) {
+                    edges {
+                        node {
+                            id
+                            name { full }
+                            image { large }
+                            description
+                        }
+                        voiceActors(language: JAPANESE) {
+                            name { full }
+                        }
                     }
                 }
-            }";
+            }
+        }
+    }";
 
         var requestBody = new { query, variables = new { page, perPage } };
         var httpResponse = await client.PostAsJsonAsync("", requestBody);
@@ -166,10 +300,32 @@ app.MapPost("/api/anime/import", async (AppDbContext db, IHttpClientFactory http
                 Summary = item.Description != null ? StripHtml(item.Description) : "No summary available.",
                 ImageUrl = item.CoverImage.Large,
                 AniListScore = item.AverageScore,
-                Popularity = item.Popularity
+                Popularity = item.Popularity,
+                Episodes = item.Episodes,
+                Status = item.Status,
+                Format = item.Format,
+                Studio = item.Studios.Nodes.Count > 0 ? string.Join(", ", item.Studios.Nodes.Select(s => s.Name)) : null,
+                SeasonYear = item.SeasonYear,
+                Season = item.Season,
+                Duration = item.Duration
             };
 
             db.Anime.Add(anime);
+            await db.SaveChangesAsync(); // ensure anime.Id is populated before adding cast
+
+            foreach (var edge in item.Characters.Edges)
+            {
+                var voiceActor = edge.VoiceActors.FirstOrDefault();
+                db.CastMember.Add(new CastMember
+                {
+                    AnimeId = anime.Id,
+                    AniListCharacterId = edge.Node.Id,
+                    CharacterName = edge.Node.Name.Full,
+                    CharacterImageUrl = edge.Node.Image.Large,
+                    CharacterDescription = edge.Node.Description != null ? CleanCharacterDescription(StripHtml(edge.Node.Description)) : null,
+                    VoiceActorName = voiceActor?.Name.Full ?? "Unknown"
+                });
+            }
             addedCount++;
         }
 
@@ -336,14 +492,34 @@ app.MapPost("/api/anime/import-one/{anilistId}", async (AppDbContext db, IHttpCl
     var client = httpClientFactory.CreateClient("AniList");
 
     var query = @"
-    query ($id: Int) {
-        Media(id: $id, type: ANIME) {
+        query ($id: Int) {
+            Media(id: $id, type: ANIME) {
             title { romaji }
             description
             genres
             coverImage { large }
             averageScore
             popularity
+            episodes
+            status
+            format
+            studios(isMain: true) { nodes { name } }
+            seasonYear
+            season
+            duration
+            characters(sort: ROLE, page: 1, perPage: 6) {
+                edges {
+                    node {
+                        id
+                        name { full }
+                        image { large }
+                        description
+                    }
+                    voiceActors(language: JAPANESE) {
+                        name { full }
+                    }
+                }
+            }
         }
     }";
 
@@ -384,7 +560,37 @@ app.MapPost("/api/anime/import-one/{anilistId}", async (AppDbContext db, IHttpCl
 
     db.Anime.Add(anime);
     await db.SaveChangesAsync();
+    if (mediaElement.TryGetProperty("characters", out var charactersProp) && charactersProp.TryGetProperty("edges", out var edgesProp))
+    {
+        foreach (var edge in edgesProp.EnumerateArray())
+        {
+            var node = edge.GetProperty("node");
+            var characterId = node.GetProperty("id").GetInt32();
+            var characterName = node.GetProperty("name").GetProperty("full").GetString() ?? "Unknown";
+            var characterImageUrl = node.TryGetProperty("image", out var imgProp) && imgProp.TryGetProperty("large", out var largeProp)
+                ? largeProp.GetString() : null;
+            var characterDescription = node.TryGetProperty("description", out var descProp2) && descProp2.ValueKind != JsonValueKind.Null
+            ? CleanCharacterDescription(StripHtml(descProp2.GetString() ?? "")) : null;
 
+            string voiceActorName = "Unknown";
+            if (edge.TryGetProperty("voiceActors", out var vaProp) && vaProp.GetArrayLength() > 0)
+            {
+                voiceActorName = vaProp[0].GetProperty("name").GetProperty("full").GetString() ?? "Unknown";
+            }
+
+            db.CastMember.Add(new CastMember
+            {
+                AnimeId = anime.Id,
+                AniListCharacterId = characterId,
+                CharacterName = characterName,
+                CharacterImageUrl = characterImageUrl,
+                CharacterDescription = characterDescription,
+                VoiceActorName = voiceActorName
+            });
+        }
+
+        await db.SaveChangesAsync();
+    }
     return Results.Ok(anime);
 })
 .WithName("ImportSingleAnime");

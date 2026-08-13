@@ -36,6 +36,34 @@ namespace OtakuScore.api.Models
         public int? AverageScore { get; set; }
         [JsonPropertyName("popularity")]
         public int? Popularity { get; set; }
+        [JsonPropertyName("episodes")]
+        public int? Episodes { get; set; }
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+        [JsonPropertyName("format")]
+        public string? Format { get; set; }
+        [JsonPropertyName("studios")]
+        public AniListStudioConnection Studios { get; set; } = new();
+        [JsonPropertyName("seasonYear")]
+        public int? SeasonYear { get; set; }
+        [JsonPropertyName("season")]
+        public string? Season { get; set; }
+        [JsonPropertyName("duration")]
+        public int? Duration { get; set; }
+        [JsonPropertyName("characters")]
+        public AniListCharacterConnection Characters { get; set; } = new();
+    }
+
+    public class AniListStudioConnection
+    {
+        [JsonPropertyName("nodes")]
+        public List<AniListStudio> Nodes { get; set; } = new();
+    }
+
+    public class AniListStudio
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
     }
 
     public class AniListCoverImage
@@ -49,5 +77,43 @@ namespace OtakuScore.api.Models
 		[JsonPropertyName("romaji")]
 		public string Romaji { get; set; } = string.Empty;
 	}
+
+    public class AniListCharacterConnection
+    {
+        [JsonPropertyName("edges")]
+        public List<AniListCharacterEdge> Edges { get; set; } = new();
+    }
+
+    public class AniListCharacterEdge
+    {
+        [JsonPropertyName("node")]
+        public AniListCharacter Node { get; set; } = new();
+        [JsonPropertyName("voiceActors")]
+        public List<AniListVoiceActor> VoiceActors { get; set; } = new();
+    }
+
+    public class AniListCharacter
+    {
+        [JsonPropertyName("id")]
+        public int Id { get; set; }
+        [JsonPropertyName("name")]
+        public AniListCharacterName Name { get; set; } = new();
+        [JsonPropertyName("image")]
+        public AniListCoverImage Image { get; set; } = new();
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+    }
+
+    public class AniListCharacterName
+    {
+        [JsonPropertyName("full")]
+        public string Full { get; set; } = string.Empty;
+    }
+
+    public class AniListVoiceActor
+    {
+        [JsonPropertyName("name")]
+        public AniListCharacterName Name { get; set; } = new();
+    }
 
 }
