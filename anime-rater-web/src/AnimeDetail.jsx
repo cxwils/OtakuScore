@@ -138,18 +138,18 @@ function AnimeDetail() {
                 <div className="detail-info">
                     <h1>{anime.title}</h1>
                     <p className="genre-tag">{anime.genre}</p>
-                    <div className="watchlist-controls">
-                        {['Watching', 'Plan to Watch', 'Completed', 'Dropped'].map((status) => (
-                            <button
-                                key={status}
-                                className={`watchlist-button ${watchlistStatus === status ? 'active' : ''}`}
-                                onClick={() => handleAddToWatchlist(status)}
-                                disabled={watchlistSaving}
-                            >
-                                {status}
-                            </button>
-                        ))}
+
+                    <div className="metadata-row">
+                        {anime.format && <span className="metadata-item">{anime.format}</span>}
+                        {anime.episodes && <span className="metadata-item">{anime.episodes} episodes</span>}
+                        {anime.duration && <span className="metadata-item">{anime.duration} min/ep</span>}
+                        {anime.status && <span className="metadata-item">{anime.status.replaceAll('_', ' ')}</span>}
+                        {anime.season && anime.seasonYear && (
+                            <span className="metadata-item">{anime.season} {anime.seasonYear}</span>
+                        )}
+                        {anime.studio && <span className="metadata-item">{anime.studio}</span>}
                     </div>
+
                     <p className="detail-summary">{anime.summary}</p>
 
                     <h2 className="section-heading">Ratings</h2>
@@ -172,6 +172,23 @@ function AnimeDetail() {
                                 <li>Binge-ability <span>{summary.averageBingeAbility}</span></li>
                             </ul>
                         </div>
+                    )}
+
+                    {anime.castMembers && anime.castMembers.length > 0 && (
+                        <>
+                            <h2 className="section-heading">Cast</h2>
+                            <div className="cast-grid">
+                                {anime.castMembers.map((cast) => (
+                                    <div className="cast-item" key={cast.id}>
+                                        {cast.characterImageUrl && (
+                                            <img src={cast.characterImageUrl} alt={cast.characterName} className="cast-image" />
+                                        )}
+                                        <p className="cast-character">{cast.characterName}</p>
+                                        <p className="cast-va">{cast.voiceActorName}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     )}
 
                     <h2 className="section-heading">Add Your Rating</h2>
