@@ -70,3 +70,38 @@ The site will be available at `http://localhost:5173`.
 ### Seeding Data
 
 Once the backend is running, import anime from AniList via Swagger:
+
+```
+POST /api/anime/import?pages=10&perPage=50
+```
+
+This pulls the most popular anime (with metadata, cast, and characters) into your local database. Adjust `pages`/`perPage` to control how many titles are imported.
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/anime` | List anime (supports `page`, `pageSize`, `search`, `genre`, `sort`) |
+| GET | `/api/anime/{id}` | Get a single anime by ID, including cast |
+| POST | `/api/anime` | Create an anime |
+| PUT | `/api/anime/{id}` | Update an anime |
+| DELETE | `/api/anime/{id}` | Delete an anime |
+| POST | `/api/anime/import` | Bulk import anime from AniList (`pages`, `perPage`) |
+| POST | `/api/anime/import-one/{anilistId}` | Import a single anime from AniList |
+| GET | `/api/anime/hottest` | Top 25 anime of the current year, live from AniList |
+| GET | `/api/anime/{animeId}/ratings` | Get ratings for an anime |
+| POST | `/api/anime/{animeId}/ratings` | Submit a category rating |
+| GET | `/api/anime/{animeId}/rating-summary` | Get per-category and overall average scores |
+| GET | `/api/characters` | List unique characters (supports `page`, `pageSize`, `search`) |
+| GET | `/api/characters/{aniListCharacterId}` | Get a character's bio, voice actor, and anime appearances |
+| GET | `/api/watchlist` | Get the current watchlist |
+| POST | `/api/watchlist` | Add or update a watchlist entry |
+| DELETE | `/api/watchlist/{animeId}` | Remove an anime from the watchlist |
+
+## Project Status
+
+🚧 In active development.
+
+## Author
+
+Christian Wilsey
