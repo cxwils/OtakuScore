@@ -110,10 +110,6 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 | POST | `/api/readinglist` | Add or update a reading list entry |
 | DELETE | `/api/readinglist/{mangaId}` | Remove a manga from the reading list |
 
-## Project Status
-
-🚧 In active development.
-
 ## Author
 
 Christian Wilsey
