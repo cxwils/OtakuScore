@@ -1,6 +1,6 @@
 ﻿# Otaku Score
 
-A full-stack anime rating platform built with ASP.NET Core, PostgreSQL, and React. Browse a searchable, filterable catalog of anime, view detailed rating breakdowns across 8 categories, explore cast and character pages, and track your own watchlist — with data sourced live from the AniList GraphQL API.
+A full-stack anime and manga rating platform built with ASP.NET Core, PostgreSQL, and React. Browse a searchable, filterable catalog of anime and manga, rate titles across 7-8 custom categories, explore cast and character pages, track your watchlist and reading list, and see what's trending — all backed by live data from the AniList GraphQL API.
 
 ## Tech Stack
 
@@ -11,16 +11,17 @@ A full-stack anime rating platform built with ASP.NET Core, PostgreSQL, and Reac
 
 ## Features
 
-- Full CRUD API for anime, with rich metadata (format, episodes, duration, status, season, studio)
-- Category-based rating system — Premise, Plot, Characters, Art Style, Animation, Pacing, Ending, and Binge-ability — with a computed overall score
-- Per-anime rating summary endpoint with per-category and overall averages
-- Search, genre filtering, and sorting (rating/title, asc/desc) on the anime catalog, with backend pagination
-- Cast and character data pulled from AniList, deduplicated across seasons/sequels, with individual character pages showing bio, voice actor, and every anime they appear in
-- Automated data ingestion from AniList (bulk and single-anime imports), with deduplication and HTML/markdown sanitization on descriptions
-- Live "Hottest Anime of the Year" endpoint querying AniList directly by current year and popularity
-- Single-user Watchlist (Watching / Plan to Watch / Completed / Dropped) with add, update, and remove
+- Full CRUD API for anime and manga, with rich metadata (format, episodes/chapters, duration, status, season, studio)
+- Category-based rating system for both anime (8 categories, including Animation) and manga (7 categories) with a computed overall score
+- Per-title rating summary endpoints with per-category and overall averages
+- Search, genre filtering, and sorting (rating/title, asc/desc) on both catalogs, with backend pagination
+- Cast and character data pulled from AniList, deduplicated across seasons/sequels, with individual character pages showing bio and every anime/manga appearance (cross-linked)
+- Automated data ingestion from AniList (bulk and single-title imports), with deduplication and HTML/markdown sanitization
+- Live "Hottest Anime of the Year" and "Anime of the Week" (trending) views queried directly from AniList
+- Separate Watchlist (anime) and Reading List (manga) with status tracking (Watching/Reading, Plan to Watch/Read, Completed, Dropped)
 - Score-based color coding (green/gold/rose) on AniList community scores
 - Light/dark theme toggle
+- Homepage hero section and persistent GitHub link
 - Interactive API documentation via Swagger UI
 
 ## Getting Started
@@ -60,7 +61,7 @@ The API will be available at `http://localhost:5094`, with Swagger UI at `http:/
 ### Frontend Setup
 
 ```bash
-cd anime-rater-web
+cd OtakuScoreFrontend
 npm install
 npm run dev
 ```
@@ -69,13 +70,14 @@ The site will be available at `http://localhost:5173`.
 
 ### Seeding Data
 
-Once the backend is running, import anime from AniList via Swagger:
+Once the backend is running, import anime and manga from AniList via Swagger:
 
 ```
 POST /api/anime/import?pages=10&perPage=50
+POST /api/manga/import?pages=10&perPage=50
 ```
 
-This pulls the most popular anime (with metadata, cast, and characters) into your local database. Adjust `pages`/`perPage` to control how many titles are imported.
+This pulls the most popular titles (with metadata, cast, and characters) into your local database. Adjust `pages`/`perPage` to control how many titles are imported.
 
 ### API Endpoints
 
@@ -89,14 +91,24 @@ This pulls the most popular anime (with metadata, cast, and characters) into you
 | POST | `/api/anime/import` | Bulk import anime from AniList (`pages`, `perPage`) |
 | POST | `/api/anime/import-one/{anilistId}` | Import a single anime from AniList |
 | GET | `/api/anime/hottest` | Top 25 anime of the current year, live from AniList |
+| GET | `/api/anime/trending` | Top 25 trending anime this week, live from AniList |
 | GET | `/api/anime/{animeId}/ratings` | Get ratings for an anime |
 | POST | `/api/anime/{animeId}/ratings` | Submit a category rating |
 | GET | `/api/anime/{animeId}/rating-summary` | Get per-category and overall average scores |
+| GET | `/api/manga` | List manga (supports `page`, `pageSize`, `search`, `genre`, `sort`) |
+| GET | `/api/manga/{id}` | Get a single manga by ID, including cast |
+| POST | `/api/manga/import` | Bulk import manga from AniList (`pages`, `perPage`) |
+| GET | `/api/manga/{mangaId}/ratings` | Get ratings for a manga |
+| POST | `/api/manga/{mangaId}/ratings` | Submit a category rating |
+| GET | `/api/manga/{mangaId}/rating-summary` | Get per-category and overall average scores |
 | GET | `/api/characters` | List unique characters (supports `page`, `pageSize`, `search`) |
-| GET | `/api/characters/{aniListCharacterId}` | Get a character's bio, voice actor, and anime appearances |
-| GET | `/api/watchlist` | Get the current watchlist |
+| GET | `/api/characters/{aniListCharacterId}` | Get a character's bio and all anime/manga appearances |
+| GET | `/api/watchlist` | Get the current anime watchlist |
 | POST | `/api/watchlist` | Add or update a watchlist entry |
 | DELETE | `/api/watchlist/{animeId}` | Remove an anime from the watchlist |
+| GET | `/api/readinglist` | Get the current manga reading list |
+| POST | `/api/readinglist` | Add or update a reading list entry |
+| DELETE | `/api/readinglist/{mangaId}` | Remove a manga from the reading list |
 
 ## Project Status
 
