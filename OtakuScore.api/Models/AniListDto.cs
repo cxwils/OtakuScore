@@ -52,6 +52,12 @@ namespace OtakuScore.api.Models
         public int? Duration { get; set; }
         [JsonPropertyName("characters")]
         public AniListCharacterConnection Characters { get; set; } = new();
+        [JsonPropertyName("chapters")]
+        public int? Chapters { get; set; }
+        [JsonPropertyName("volumes")]
+        public int? Volumes { get; set; }
+        [JsonPropertyName("startDate")]
+        public AniListStartDate? StartDate { get; set; }
     }
 
     public class AniListStudioConnection
@@ -115,5 +121,12 @@ namespace OtakuScore.api.Models
         [JsonPropertyName("name")]
         public AniListCharacterName Name { get; set; } = new();
     }
+
+    public class AniListStartDate
+    {
+        [JsonPropertyName("year")]
+        public int? Year { get; set; }
+    }
+
 
 }

@@ -143,39 +143,66 @@ app.MapGet("/api/characters", async (AppDbContext db, int page = 1, int pageSize
 
 app.MapGet("/api/characters/{aniListCharacterId}", async (AppDbContext db, int aniListCharacterId) =>
 {
-    var appearances = await db.CastMember
+    var animeAppearancesRaw = await db.CastMember
         .Include(c => c.Anime)
         .Where(c => c.AniListCharacterId == aniListCharacterId)
         .ToListAsync();
 
-    if (appearances.Count == 0)
+    var mangaAppearancesRaw = await db.MangaCastMember
+        .Include(c => c.Manga)
+        .Where(c => c.AniListCharacterId == aniListCharacterId)
+        .ToListAsync();
+
+    if (animeAppearancesRaw.Count == 0 && mangaAppearancesRaw.Count == 0)
     {
         return Results.NotFound();
     }
 
-    var first = appearances.First();
+    var first = animeAppearancesRaw.Count > 0
+        ? (object)animeAppearancesRaw.First()
+        : mangaAppearancesRaw.First();
+
+    string characterName = animeAppearancesRaw.Count > 0
+        ? animeAppearancesRaw.First().CharacterName
+        : mangaAppearancesRaw.First().CharacterName;
+    string? characterImageUrl = animeAppearancesRaw.Count > 0
+        ? animeAppearancesRaw.First().CharacterImageUrl
+        : mangaAppearancesRaw.First().CharacterImageUrl;
+    string? characterDescription = animeAppearancesRaw.Count > 0
+        ? animeAppearancesRaw.First().CharacterDescription
+        : mangaAppearancesRaw.First().CharacterDescription;
+    string voiceActorName = animeAppearancesRaw.Count > 0
+        ? animeAppearancesRaw.First().VoiceActorName
+        : "N/A";
 
     var result = new
     {
         aniListCharacterId,
-        characterName = first.CharacterName,
-        characterImageUrl = first.CharacterImageUrl,
-        characterDescription = first.CharacterDescription,
-        voiceActorName = first.VoiceActorName,
-        animeAppearances = appearances
+        characterName,
+        characterImageUrl,
+        characterDescription,
+        voiceActorName,
+        animeAppearances = animeAppearancesRaw
             .Where(a => a.Anime != null)
             .Select(a => new
             {
                 animeId = a.AnimeId,
                 title = a.Anime!.Title,
                 imageUrl = a.Anime!.ImageUrl
+            }),
+        mangaAppearances = mangaAppearancesRaw
+            .Where(m => m.Manga != null)
+            .Select(m => new
+            {
+                mangaId = m.MangaId,
+                title = m.Manga!.Title,
+                imageUrl = m.Manga!.ImageUrl
             })
     };
 
     return Results.Ok(result);
 })
 .WithName("GetCharacterById");
-
 app.MapGet("/api/anime/{id}", async (AppDbContext db, int id) =>
 {
     var anime = await db.Anime
@@ -339,6 +366,256 @@ app.MapPost("/api/anime/import", async (AppDbContext db, IHttpClientFactory http
 })
 .WithName("ImportFromAniList");
 
+app.MapPost("/api/manga/import", async (AppDbContext db, IHttpClientFactory httpClientFactory, int pages = 5, int perPage = 25) =>
+{
+    var client = httpClientFactory.CreateClient("AniList");
+    int addedCount = 0;
+
+    for (int page = 1; page <= pages; page++)
+    {
+            var query = @"
+        query ($page: Int, $perPage: Int) {
+            Page(page: $page, perPage: $perPage) {
+                media(type: MANGA, sort: POPULARITY_DESC) {
+                    title { romaji }
+                    description
+                    genres
+                    coverImage { large }
+                    averageScore
+                    popularity
+                    chapters
+                    volumes
+                    status
+                    format
+                    startDate { year }
+                    characters(sort: ROLE, page: 1, perPage: 6) {
+                        edges {
+                            node {
+                                id
+                                name { full }
+                                image { large }
+                                description
+                            }
+                        }
+                    }
+                }
+            }
+        }";
+
+        var requestBody = new { query, variables = new { page, perPage } };
+        var httpResponse = await client.PostAsJsonAsync("", requestBody);
+
+        if (!httpResponse.IsSuccessStatusCode)
+        {
+            break;
+        }
+
+        var response = await httpResponse.Content.ReadFromJsonAsync<AniListResponse>();
+
+        if (response is null || response.Data.Page.Media.Count == 0)
+        {
+            break;
+        }
+
+        foreach (var item in response.Data.Page.Media)
+        {
+            bool exists = await db.Manga.AnyAsync(m => m.Title == item.Title.Romaji);
+            if (exists)
+            {
+                continue;
+            }
+
+            var manga = new Manga
+            {
+                Title = item.Title.Romaji,
+                Genre = string.Join(", ", item.Genres),
+                Summary = item.Description != null ? StripHtml(item.Description) : "No summary available.",
+                ImageUrl = item.CoverImage.Large,
+                AniListScore = item.AverageScore,
+                Popularity = item.Popularity,
+                Chapters = item.Chapters,
+                Volumes = item.Volumes,
+                Status = item.Status,
+                Format = item.Format,
+                StartYear = item.StartDate?.Year
+            };
+
+            db.Manga.Add(manga);
+            await db.SaveChangesAsync();
+
+            foreach (var edge in item.Characters.Edges)
+            {
+                db.MangaCastMember.Add(new MangaCastMember
+                {
+                    MangaId = manga.Id,
+                    AniListCharacterId = edge.Node.Id,
+                    CharacterName = edge.Node.Name.Full,
+                    CharacterImageUrl = edge.Node.Image.Large,
+                    CharacterDescription = edge.Node.Description != null ? CleanCharacterDescription(StripHtml(edge.Node.Description)) : null
+                });
+            }
+            addedCount++;
+        }
+
+        await db.SaveChangesAsync();
+        await Task.Delay(500);
+    }
+
+    return Results.Ok(new { imported = addedCount });
+})
+.WithName("ImportMangaFromAniList");
+
+app.MapGet("/api/manga", async (AppDbContext db, int page = 1, int pageSize = 25, string? search = null, string? genre = null, string? sort = null) =>
+{
+    var query = db.Manga.AsQueryable();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        query = query.Where(m => EF.Functions.ILike(m.Title, $"%{search}%"));
+    }
+
+    if (!string.IsNullOrWhiteSpace(genre))
+    {
+        query = query.Where(m => EF.Functions.ILike(m.Genre, $"%{genre}%"));
+    }
+
+    query = sort switch
+    {
+        "rating_desc" => query.OrderByDescending(m => m.AniListScore ?? 0),
+        "rating_asc" => query.OrderBy(m => m.AniListScore ?? 0),
+        "title_asc" => query.OrderBy(m => m.Title),
+        "title_desc" => query.OrderByDescending(m => m.Title),
+        _ => query.OrderBy(m => m.Id)
+    };
+
+    var totalCount = await query.CountAsync();
+
+    var items = await query
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .ToListAsync();
+
+    return Results.Ok(new
+    {
+        items,
+        page,
+        pageSize,
+        totalCount,
+        totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+    });
+})
+.WithName("GetAllManga");
+
+app.MapGet("/api/manga/{id}", async (AppDbContext db, int id) =>
+{
+    var manga = await db.Manga
+        .Include(m => m.MangaCastMembers)
+        .FirstOrDefaultAsync(m => m.Id == id);
+
+    if (manga is null)
+    {
+        return Results.NotFound();
+    }
+    return Results.Ok(manga);
+})
+.WithName("GetMangaById");
+
+app.MapGet("/api/manga/{mangaId}/ratings", async (AppDbContext db, int mangaId) =>
+{
+    return await db.MangaRating.Where(r => r.MangaId == mangaId).ToListAsync();
+})
+.WithName("GetRatingsForManga");
+
+app.MapPost("/api/manga/{mangaId}/ratings", async (AppDbContext db, int mangaId, MangaRating rating) =>
+{
+    var mangaExists = await db.Manga.AnyAsync(m => m.Id == mangaId);
+    if (!mangaExists)
+    {
+        return Results.NotFound("Manga not found.");
+    }
+
+    rating.MangaId = mangaId;
+    db.MangaRating.Add(rating);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/manga/{mangaId}/ratings/{rating.Id}", rating);
+})
+.WithName("CreateMangaRating");
+
+app.MapGet("/api/manga/{mangaId}/rating-summary", async (AppDbContext db, int mangaId) =>
+{
+    var mangaExists = await db.Manga.AnyAsync(m => m.Id == mangaId);
+    if (!mangaExists)
+    {
+        return Results.NotFound("Manga not found.");
+    }
+
+    var ratings = await db.MangaRating.Where(r => r.MangaId == mangaId).ToListAsync();
+
+    if (ratings.Count == 0)
+    {
+        return Results.Ok(new { mangaId, ratingCount = 0 });
+    }
+
+    var summary = new
+    {
+        mangaId,
+        ratingCount = ratings.Count,
+        averagePremise = Math.Round(ratings.Average(r => r.Premise), 2),
+        averagePlot = Math.Round(ratings.Average(r => r.Plot), 2),
+        averageCharacters = Math.Round(ratings.Average(r => r.Characters), 2),
+        averageArtStyle = Math.Round(ratings.Average(r => r.ArtStyle), 2),
+        averagePacing = Math.Round(ratings.Average(r => r.Pacing), 2),
+        averageEnding = Math.Round(ratings.Average(r => r.Ending), 2),
+        averageBingeAbility = Math.Round(ratings.Average(r => r.BingeAbility), 2),
+        overallScore = Math.Round(ratings.Average(r => r.OverallScore), 2)
+    };
+
+    return Results.Ok(summary);
+})
+.WithName("GetMangaRatingSummary");
+
+app.MapGet("/api/readinglist", async (AppDbContext db) =>
+{
+    return await db.ReadingListEntry.Include(r => r.Manga).ToListAsync();
+})
+.WithName("GetReadingList");
+
+app.MapPost("/api/readinglist", async (AppDbContext db, ReadingListEntry entry) =>
+{
+    var mangaExists = await db.Manga.AnyAsync(m => m.Id == entry.MangaId);
+    if (!mangaExists)
+    {
+        return Results.NotFound("Manga not found.");
+    }
+
+    var existing = await db.ReadingListEntry.FirstOrDefaultAsync(r => r.MangaId == entry.MangaId);
+    if (existing is not null)
+    {
+        existing.Status = entry.Status;
+        await db.SaveChangesAsync();
+        return Results.Ok(existing);
+    }
+
+    db.ReadingListEntry.Add(entry);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/readinglist/{entry.Id}", entry);
+})
+.WithName("AddOrUpdateReadingListEntry");
+
+app.MapDelete("/api/readinglist/{mangaId}", async (AppDbContext db, int mangaId) =>
+{
+    var entry = await db.ReadingListEntry.FirstOrDefaultAsync(r => r.MangaId == mangaId);
+    if (entry is null)
+    {
+        return Results.NotFound();
+    }
+
+    db.ReadingListEntry.Remove(entry);
+    await db.SaveChangesAsync();
+    return Results.NoContent();
+})
+.WithName("RemoveFromReadingList");
+
 app.MapGet("/api/anime/{animeId}/ratings", async (AppDbContext db, int animeId) =>
  {
      return await db.Rating.Where(r => r.AnimeId == animeId).ToListAsync();
@@ -444,6 +721,51 @@ app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
     return Results.Ok(hottestList);
 })
 .WithName("GetHottestAnimeOfYear");
+
+app.MapGet("/api/anime/trending", async (IHttpClientFactory httpClientFactory) =>
+{
+    var client = httpClientFactory.CreateClient("AniList");
+
+    var query = @"
+        query {
+            Page(perPage: 25) {
+                media(type: ANIME, sort: TRENDING_DESC) {
+                    id
+                    title { romaji }
+                    description
+                    genres
+                    coverImage { large }
+                    averageScore
+                    popularity
+                }
+            }
+        }";
+
+    var requestBody = new { query };
+    var httpResponse = await client.PostAsJsonAsync("", requestBody);
+    httpResponse.EnsureSuccessStatusCode();
+
+    var response = await httpResponse.Content.ReadFromJsonAsync<AniListResponse>();
+
+    if (response is null)
+    {
+        return Results.Problem("No data returned from AniList.");
+    }
+
+    var trendingList = response.Data.Page.Media.Select(item => new
+    {
+        anilistId = item.Id,
+        title = item.Title.Romaji,
+        genre = string.Join(", ", item.Genres),
+        summary = item.Description != null ? StripHtml(item.Description) : "No summary available.",
+        imageUrl = item.CoverImage.Large,
+        aniListScore = item.AverageScore,
+        popularity = item.Popularity
+    });
+
+    return Results.Ok(trendingList);
+})
+.WithName("GetTrendingAnime");
 
 app.MapGet("/api/watchlist", async (AppDbContext db) =>
 {

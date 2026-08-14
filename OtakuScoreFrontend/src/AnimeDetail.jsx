@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+
 
 const CATEGORIES = [
     { key: 'premise', label: 'Premise' },
@@ -17,8 +18,16 @@ const emptyForm = CATEGORIES.reduce((acc, cat) => {
     return acc;
 }, { review: '' });
 
+function getScoreColor(score) {
+    if (score === null || score === undefined) return 'var(--text-dim)';
+    if (score >= 80) return '#6FCF97';
+    if (score >= 60) return '#E3A857';
+    return '#C1495A';
+}
+
 function AnimeDetail() {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [anime, setAnime] = useState(null);
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -136,9 +145,31 @@ function AnimeDetail() {
                 )}
 
                 <div className="detail-info">
-                    <h1>{anime.title}</h1>
+                    <div className="detail-title-row">
+                        <h1>{anime.title}</h1>
+                        <span
+                            className="seal"
+                            style={{
+                                color: getScoreColor(anime.aniListScore),
+                                borderColor: getScoreColor(anime.aniListScore),
+                            }}
+                        >
+                            {anime.aniListScore ?? '—'}
+                        </span>
+                    </div>
                     <p className="genre-tag">{anime.genre}</p>
-
+                    <div className="watchlist-controls">
+                        {['Watching', 'Plan to Watch', 'Completed', 'Dropped'].map((status) => (
+                            <button
+                                key={status}
+                                className={`watchlist-button ${watchlistStatus === status ? 'active' : ''}`}
+                                onClick={() => handleAddToWatchlist(status)}
+                                disabled={watchlistSaving}
+                            >
+                                {status}
+                            </button>
+                        ))}
+                    </div>
                     <div className="metadata-row">
                         {anime.format && <span className="metadata-item">{anime.format}</span>}
                         {anime.episodes && <span className="metadata-item">{anime.episodes} episodes</span>}
@@ -179,7 +210,11 @@ function AnimeDetail() {
                             <h2 className="section-heading">Cast</h2>
                             <div className="cast-grid">
                                 {anime.castMembers.map((cast) => (
-                                    <div className="cast-item" key={cast.id}>
+                                    <div
+                                        className="cast-item card-link"
+                                        key={cast.id}
+                                        onClick={() => navigate(`/character/${cast.aniListCharacterId}`)}
+                                    >
                                         {cast.characterImageUrl && (
                                             <img src={cast.characterImageUrl} alt={cast.characterName} className="cast-image" />
                                         )}

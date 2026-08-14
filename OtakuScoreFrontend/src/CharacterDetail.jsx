@@ -48,27 +48,57 @@ function CharacterDetail() {
                         <p className="detail-summary">{character.characterDescription}</p>
                     )}
 
-                    <h2 className="section-heading">Appears In</h2>
-                    <div className="anime-grid">
-                        {character.animeAppearances.map((appearance) => (
-                            <Link
-                                to={`/anime/${appearance.animeId}`}
-                                key={appearance.animeId}
-                                className="card-link"
-                            >
-                                <article className="anime-card">
-                                    {appearance.imageUrl && (
-                                        <img
-                                            src={appearance.imageUrl}
-                                            alt={appearance.title}
-                                            className="anime-poster"
-                                        />
-                                    )}
-                                    <h2>{appearance.title}</h2>
-                                </article>
-                            </Link>
-                        ))}
-                    </div>
+                    {character.animeAppearances && character.animeAppearances.length > 0 && (
+                        <>
+                            <h2 className="section-heading">Anime</h2>
+                            <div className="anime-grid">
+                                {character.animeAppearances.map((appearance) => (
+                                    <Link
+                                        to={`/anime/${appearance.animeId}`}
+                                        key={appearance.animeId}
+                                        className="card-link"
+                                    >
+                                        <article className="anime-card">
+                                            {appearance.imageUrl && (
+                                                <img
+                                                    src={appearance.imageUrl}
+                                                    alt={appearance.title}
+                                                    className="anime-poster"
+                                                />
+                                            )}
+                                            <h2>{appearance.title}</h2>
+                                        </article>
+                                    </Link>
+                                ))}
+                            </div>
+                        </>
+                    )}
+
+                    {character.mangaAppearances && character.mangaAppearances.length > 0 && (
+                        <>
+                            <h2 className="section-heading">Manga</h2>
+                            <div className="anime-grid">
+                                {character.mangaAppearances.map((appearance) => (
+                                    <Link
+                                        to={`/manga/${appearance.mangaId}`}
+                                        key={appearance.mangaId}
+                                        className="card-link"
+                                    >
+                                        <article className="anime-card">
+                                            {appearance.imageUrl && (
+                                                <img
+                                                    src={appearance.imageUrl}
+                                                    alt={appearance.title}
+                                                    className="anime-poster"
+                                                />
+                                            )}
+                                            <h2>{appearance.title}</h2>
+                                        </article>
+                                    </Link>
+                                ))}
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

@@ -111,6 +111,128 @@ namespace OtakuScore.api.Migrations
                     b.ToTable("CastMember");
                 });
 
+            modelBuilder.Entity("OtakuScore.api.Models.Manga", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AniListScore")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("Chapters")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Format")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Genre")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("Popularity")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("StartYear")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("Volumes")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Manga");
+                });
+
+            modelBuilder.Entity("OtakuScore.api.Models.MangaCastMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AniListCharacterId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CharacterDescription")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CharacterImageUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CharacterName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("MangaId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MangaId");
+
+                    b.ToTable("MangaCastMember");
+                });
+
+            modelBuilder.Entity("OtakuScore.api.Models.MangaRating", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ArtStyle")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("BingeAbility")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Characters")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Ending")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MangaId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Pacing")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Plot")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Premise")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Review")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MangaId");
+
+                    b.ToTable("MangaRating");
+                });
+
             modelBuilder.Entity("OtakuScore.api.Models.Rating", b =>
                 {
                     b.Property<int>("Id")
@@ -156,6 +278,28 @@ namespace OtakuScore.api.Migrations
                     b.ToTable("Rating");
                 });
 
+            modelBuilder.Entity("OtakuScore.api.Models.ReadingListEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MangaId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MangaId");
+
+                    b.ToTable("ReadingListEntry");
+                });
+
             modelBuilder.Entity("OtakuScore.api.Models.WatchlistEntry", b =>
                 {
                     b.Property<int>("Id")
@@ -189,6 +333,28 @@ namespace OtakuScore.api.Migrations
                     b.Navigation("Anime");
                 });
 
+            modelBuilder.Entity("OtakuScore.api.Models.MangaCastMember", b =>
+                {
+                    b.HasOne("OtakuScore.api.Models.Manga", "Manga")
+                        .WithMany("MangaCastMembers")
+                        .HasForeignKey("MangaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Manga");
+                });
+
+            modelBuilder.Entity("OtakuScore.api.Models.MangaRating", b =>
+                {
+                    b.HasOne("OtakuScore.api.Models.Manga", "Manga")
+                        .WithMany("Ratings")
+                        .HasForeignKey("MangaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Manga");
+                });
+
             modelBuilder.Entity("OtakuScore.api.Models.Rating", b =>
                 {
                     b.HasOne("OtakuScore.api.Models.Anime", "Anime")
@@ -198,6 +364,17 @@ namespace OtakuScore.api.Migrations
                         .IsRequired();
 
                     b.Navigation("Anime");
+                });
+
+            modelBuilder.Entity("OtakuScore.api.Models.ReadingListEntry", b =>
+                {
+                    b.HasOne("OtakuScore.api.Models.Manga", "Manga")
+                        .WithMany()
+                        .HasForeignKey("MangaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Manga");
                 });
 
             modelBuilder.Entity("OtakuScore.api.Models.WatchlistEntry", b =>
@@ -214,6 +391,13 @@ namespace OtakuScore.api.Migrations
             modelBuilder.Entity("OtakuScore.api.Models.Anime", b =>
                 {
                     b.Navigation("CastMembers");
+
+                    b.Navigation("Ratings");
+                });
+
+            modelBuilder.Entity("OtakuScore.api.Models.Manga", b =>
+                {
+                    b.Navigation("MangaCastMembers");
 
                     b.Navigation("Ratings");
                 });
