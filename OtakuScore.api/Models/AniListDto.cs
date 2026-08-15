@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
-
+public record RegisterRequest(string Username, string Email, string Password);
+public record LoginRequest(string Username, string Password);
 namespace OtakuScore.api.Models
 {
 	public class AniListResponse

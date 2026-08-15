@@ -4,6 +4,9 @@ import AnimeDetail from './AnimeDetail.jsx';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import CharacterDetail from './CharacterDetail.jsx';
 import MangaDetail from './MangaDetail.jsx';
+import AuthPage from './AuthPage.jsx';
+import { useAuth } from './AuthContext.jsx';
+import { API_BASE_URL } from './config.js';
 
 const TABS = ['Anime', 'Manga', 'Characters', 'Anime of the Week', 'My List'];
 
@@ -45,6 +48,7 @@ function App() {
     const [trendingList, setTrendingList] = useState([]);
     const [trendingLoading, setTrendingLoading] = useState(true);
     const [trendingError, setTrendingError] = useState(null);
+    const { username, token, logout } = useAuth();
 
     function getScoreColor(score) {
         if (score === null || score === undefined) return 'var(--text-dim)';
@@ -54,8 +58,9 @@ function App() {
     }
 
     const handleRemoveFromWatchlist = (animeId) => {
-        fetch(`http://localhost:5094/api/watchlist/${animeId}`, {
+        fetch(`${API_BASE_URL}/api/watchlist/${animeId}`, {
             method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
         })
             .then((res) => {
                 if (!res.ok) throw new Error('Failed to remove from watchlist');
@@ -73,7 +78,7 @@ function App() {
         if (genreFilter) params.append('genre', genreFilter);
         if (sortOrder) params.append('sort', sortOrder);
 
-        fetch(`http://localhost:5094/api/anime?${params.toString()}`)
+        fetch(`${API_BASE_URL}/api/anime?${params.toString()}`)
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch anime');
                 return response.json();
@@ -93,7 +98,7 @@ function App() {
         setAnimePage(1);
     }, [searchTerm, genreFilter, sortOrder]);
     useEffect(() => {
-        fetch('http://localhost:5094/api/anime/hottest')
+        fetch(`${API_BASE_URL}/api/anime/hottest`)
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch hottest anime');
                 return response.json();
@@ -108,7 +113,7 @@ function App() {
             });
     }, []);
     useEffect(() => {
-        fetch('http://localhost:5094/api/anime/trending')
+        fetch(`${API_BASE_URL}/api/anime/trending`)
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch trending anime');
                 return response.json();
@@ -128,7 +133,14 @@ function App() {
     }, [darkMode]);
 
     useEffect(() => {
-        fetch('http://localhost:5094/api/watchlist')
+        if (!token) {
+            setWatchlist([]);
+            setWatchlistLoading(false);
+            return;
+        }
+        fetch(`${API_BASE_URL}/api/watchlist`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        })
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch watchlist');
                 return response.json();
@@ -141,7 +153,7 @@ function App() {
                 setWatchlistError(err.message);
                 setWatchlistLoading(false);
             });
-    }, [activeTab]);
+    }, [activeTab, token]);
 
     useEffect(() => {
         const params = new URLSearchParams({
@@ -150,7 +162,7 @@ function App() {
         });
         if (characterSearch) params.append('search', characterSearch);
 
-        fetch(`http://localhost:5094/api/characters?${params.toString()}`)
+        fetch(`${API_BASE_URL}/api/characters?${params.toString()}`)
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch characters');
                 return response.json();
@@ -178,7 +190,7 @@ function App() {
         if (mangaGenreFilter) params.append('genre', mangaGenreFilter);
         if (mangaSortOrder) params.append('sort', mangaSortOrder);
 
-        fetch(`http://localhost:5094/api/manga?${params.toString()}`)
+        fetch(`${API_BASE_URL}/api/manga?${params.toString()}`)
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch manga');
                 return response.json();
@@ -198,7 +210,14 @@ function App() {
     }, [mangaSearch, mangaGenreFilter, mangaSortOrder]);
 
     useEffect(() => {
-        fetch('http://localhost:5094/api/readinglist')
+        if (!token) {
+            setReadingList([]);
+            setReadingListLoading(false);
+            return;
+        }
+        fetch(`${API_BASE_URL}/api/readinglist`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+        })
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch reading list');
                 return response.json();
@@ -211,11 +230,12 @@ function App() {
                 setReadingListError(err.message);
                 setReadingListLoading(false);
             });
-    }, [activeTab]);
+    }, [activeTab, token]);
 
     const handleRemoveFromReadingList = (mangaId) => {
-        fetch(`http://localhost:5094/api/readinglist/${mangaId}`, {
+        fetch(`${API_BASE_URL}/api/readinglist/${mangaId}`, {
             method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
         })
             .then((res) => {
                 if (!res.ok) throw new Error('Failed to remove from reading list');
@@ -225,7 +245,7 @@ function App() {
     };
 
     const handleHottestClick = (anilistId) => {
-        fetch(`http://localhost:5094/api/anime/import-one/${anilistId}`, {
+        fetch(`${API_BASE_URL}/api/anime/import-one/${anilistId}`, {
             method: 'POST',
         })
             .then((res) => {
@@ -240,8 +260,7 @@ function App() {
 
     return (
         <div>
-            
-                <a href="https://github.com/cxwils/OtakuScore"
+            <a href="https://github.com/cxwils/OtakuScore"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="github-link"
@@ -305,6 +324,18 @@ function App() {
                         </button>
                     ))}
                 </nav>
+                <div className="auth-nav-group">
+                    {username ? (
+                        <>
+                            <button className="nav-tab" onClick={logout}>Log Out</button>
+                        </>
+                    ) : (
+                        <>
+                            <Link to="/auth/login" className="nav-tab">Log In</Link>
+                            <Link to="/auth/register" className="nav-tab signup-tab">Sign Up</Link>
+                        </>
+                    )}
+                </div>
             </header>
 
             <main>
@@ -721,6 +752,7 @@ function App() {
                     <Route path="/anime/:id" element={<AnimeDetail />} />
                     <Route path="/character/:id" element={<CharacterDetail />} />
                     <Route path="/manga/:id" element={<MangaDetail />} />
+                    <Route path="/auth/:mode" element={<AuthPage />} />
                 </Routes>
             </main>
         </div>

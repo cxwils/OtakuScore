@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext.jsx';
+import { API_BASE_URL } from './config.js';
 
 
 const CATEGORIES = [
@@ -41,15 +43,17 @@ function AnimeDetail() {
     const [watchlistStatus, setWatchlistStatus] = useState(null);
     const [watchlistSaving, setWatchlistSaving] = useState(false);
 
+    const { token } = useAuth();
+    const [watchlistError, setWatchlistError] = useState(null);
 
     const loadData = () => {
         setLoading(true);
         Promise.all([
-            fetch(`http://localhost:5094/api/anime/${id}`).then((res) => {
+            fetch(`${API_BASE_URL}/api/anime/${id}`).then((res) => {
                 if (!res.ok) throw new Error('Anime not found');
                 return res.json();
             }),
-            fetch(`http://localhost:5094/api/anime/${id}/rating-summary`).then((res) => {
+            fetch(`${API_BASE_URL}/api/anime/${id}/rating-summary`).then((res) => {
                 if (!res.ok) throw new Error('Failed to load ratings');
                 return res.json();
             }),
@@ -75,6 +79,10 @@ function AnimeDetail() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (!token) {
+            setSubmitError('You must be logged in to submit a rating.');
+            return;
+        }
         setSubmitting(true);
         setSubmitError(null);
         setSubmitSuccess(false);
@@ -93,9 +101,12 @@ function AnimeDetail() {
             review: formData.review,
         };
 
-        fetch(`http://localhost:5094/api/anime/${id}/ratings`, {
+        fetch(`${API_BASE_URL}/api/anime/${id}/ratings`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify(payload),
         })
             .then((res) => {
@@ -114,10 +125,17 @@ function AnimeDetail() {
             });
     };
     const handleAddToWatchlist = (status) => {
+        if (!token) {
+            setWatchlistError('You must be logged in to do that.');
+            return;
+        }
         setWatchlistSaving(true);
-        fetch('http://localhost:5094/api/watchlist', {
+        fetch(`${API_BASE_URL}/api/watchlist`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify({ id: 0, animeId: Number(id), status }),
         })
             .then((res) => {
@@ -128,7 +146,10 @@ function AnimeDetail() {
                 setWatchlistStatus(data.status);
                 setWatchlistSaving(false);
             })
-            .catch(() => setWatchlistSaving(false));
+            .catch((err) => {
+                setWatchlistError(err.message);
+                setWatchlistSaving(false);
+            });
     };
 
     if (loading) return <p className="status-message">Loading…</p>;

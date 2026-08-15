@@ -16,6 +16,8 @@ namespace OtakuScore.api.Models
         public int BingeAbility { get; set; }
 
         public string? Review { get; set; }
+        public string? UserId { get; set; }
+
 
         public double OverallScore =>
             Math.Round((Premise + Plot + Characters + ArtStyle + Animation + Pacing + Ending + BingeAbility) / 8.0, 2);

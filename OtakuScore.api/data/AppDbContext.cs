@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using OtakuScore.api.Models;
 
 namespace OtakuScore.api.Data
 {
-    public class AppDbContext : DbContext
+    public class AppDbContext : IdentityDbContext<IdentityUser>
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -15,5 +17,10 @@ namespace OtakuScore.api.Data
         public DbSet<MangaRating> MangaRating { get; set; }
         public DbSet<ReadingListEntry> ReadingListEntry { get; set; }
         public DbSet<MangaCastMember> MangaCastMember { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+        }
     }
 }

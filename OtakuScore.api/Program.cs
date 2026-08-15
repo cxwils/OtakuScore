@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using OtakuScore.api.Data;
 using OtakuScore.api.Models;
 using System.Text.Json;
+using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 
 static string StripHtml(string input)
 {
@@ -25,9 +27,67 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
 });
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter 'Bearer' followed by a space and your JWT token."
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
+{
+    options.Password.RequireDigit = true;
+    options.Password.RequiredLength = 6;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+})
+.AddEntityFrameworkStores<AppDbContext>()
+.AddDefaultTokenProviders();
+
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("JWT key not configured.");
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+    {
+        ValidateIssuer = false,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+            System.Text.Encoding.UTF8.GetBytes(jwtKey))
+    };
+});
+
+builder.Services.AddAuthorization();
 builder.Services.AddHttpClient("AniList", client =>
 {
     client.BaseAddress = new Uri("https://graphql.anilist.co/");
@@ -37,7 +97,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        var allowedOrigins = builder.Configuration["AllowedOrigins"]?.Split(',') ?? new[] { "http://localhost:5173" };
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -54,6 +115,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/api/anime", async (AppDbContext db, int page = 1, int pageSize = 25, string? search = null, string? genre = null, string? sort = null) =>
 {
@@ -526,8 +589,14 @@ app.MapGet("/api/manga/{mangaId}/ratings", async (AppDbContext db, int mangaId) 
 })
 .WithName("GetRatingsForManga");
 
-app.MapPost("/api/manga/{mangaId}/ratings", async (AppDbContext db, int mangaId, MangaRating rating) =>
+app.MapPost("/api/manga/{mangaId}/ratings", async (AppDbContext db, int mangaId, MangaRating rating, System.Security.Claims.ClaimsPrincipal user) =>
 {
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
     var mangaExists = await db.Manga.AnyAsync(m => m.Id == mangaId);
     if (!mangaExists)
     {
@@ -535,10 +604,12 @@ app.MapPost("/api/manga/{mangaId}/ratings", async (AppDbContext db, int mangaId,
     }
 
     rating.MangaId = mangaId;
+    rating.UserId = userId;
     db.MangaRating.Add(rating);
     await db.SaveChangesAsync();
     return Results.Created($"/api/manga/{mangaId}/ratings/{rating.Id}", rating);
 })
+.RequireAuthorization()
 .WithName("CreateMangaRating");
 
 app.MapGet("/api/manga/{mangaId}/rating-summary", async (AppDbContext db, int mangaId) =>
@@ -574,21 +645,39 @@ app.MapGet("/api/manga/{mangaId}/rating-summary", async (AppDbContext db, int ma
 })
 .WithName("GetMangaRatingSummary");
 
-app.MapGet("/api/readinglist", async (AppDbContext db) =>
+app.MapGet("/api/readinglist", async (AppDbContext db, System.Security.Claims.ClaimsPrincipal user) =>
 {
-    return await db.ReadingListEntry.Include(r => r.Manga).ToListAsync();
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var entries = await db.ReadingListEntry
+        .Include(r => r.Manga)
+        .Where(r => r.UserId == userId)
+        .ToListAsync();
+
+    return Results.Ok(entries);
 })
+.RequireAuthorization()
 .WithName("GetReadingList");
 
-app.MapPost("/api/readinglist", async (AppDbContext db, ReadingListEntry entry) =>
+app.MapPost("/api/readinglist", async (AppDbContext db, ReadingListEntry entry, System.Security.Claims.ClaimsPrincipal user) =>
 {
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
     var mangaExists = await db.Manga.AnyAsync(m => m.Id == entry.MangaId);
     if (!mangaExists)
     {
         return Results.NotFound("Manga not found.");
     }
 
-    var existing = await db.ReadingListEntry.FirstOrDefaultAsync(r => r.MangaId == entry.MangaId);
+    var existing = await db.ReadingListEntry.FirstOrDefaultAsync(r => r.MangaId == entry.MangaId && r.UserId == userId);
     if (existing is not null)
     {
         existing.Status = entry.Status;
@@ -596,15 +685,23 @@ app.MapPost("/api/readinglist", async (AppDbContext db, ReadingListEntry entry) 
         return Results.Ok(existing);
     }
 
+    entry.UserId = userId;
     db.ReadingListEntry.Add(entry);
     await db.SaveChangesAsync();
     return Results.Created($"/api/readinglist/{entry.Id}", entry);
 })
+.RequireAuthorization()
 .WithName("AddOrUpdateReadingListEntry");
 
-app.MapDelete("/api/readinglist/{mangaId}", async (AppDbContext db, int mangaId) =>
+app.MapDelete("/api/readinglist/{mangaId}", async (AppDbContext db, int mangaId, System.Security.Claims.ClaimsPrincipal user) =>
 {
-    var entry = await db.ReadingListEntry.FirstOrDefaultAsync(r => r.MangaId == mangaId);
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var entry = await db.ReadingListEntry.FirstOrDefaultAsync(r => r.MangaId == mangaId && r.UserId == userId);
     if (entry is null)
     {
         return Results.NotFound();
@@ -614,6 +711,7 @@ app.MapDelete("/api/readinglist/{mangaId}", async (AppDbContext db, int mangaId)
     await db.SaveChangesAsync();
     return Results.NoContent();
 })
+.RequireAuthorization()
 .WithName("RemoveFromReadingList");
 
 app.MapGet("/api/anime/{animeId}/ratings", async (AppDbContext db, int animeId) =>
@@ -622,8 +720,14 @@ app.MapGet("/api/anime/{animeId}/ratings", async (AppDbContext db, int animeId) 
  })
 .WithName("GetRatingsForAnime");
 
-app.MapPost("/api/anime/{animeId}/ratings", async (AppDbContext db, int animeId, Rating rating) =>
+app.MapPost("/api/anime/{animeId}/ratings", async (AppDbContext db, int animeId, Rating rating, System.Security.Claims.ClaimsPrincipal user) =>
 {
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
     var animeExists = await db.Anime.AnyAsync(a => a.Id == animeId);
     if (!animeExists)
     {
@@ -631,10 +735,12 @@ app.MapPost("/api/anime/{animeId}/ratings", async (AppDbContext db, int animeId,
     }
 
     rating.AnimeId = animeId;
+    rating.UserId = userId;
     db.Rating.Add(rating);
     await db.SaveChangesAsync();
     return Results.Created($"/api/anime/{animeId}/ratings/{rating.Id}", rating);
 })
+.RequireAuthorization()
 .WithName("CreateRating");
 
 app.MapGet("/api/anime/{animeId}/rating-summary", async (AppDbContext db, int animeId) =>
@@ -767,21 +873,39 @@ app.MapGet("/api/anime/trending", async (IHttpClientFactory httpClientFactory) =
 })
 .WithName("GetTrendingAnime");
 
-app.MapGet("/api/watchlist", async (AppDbContext db) =>
+app.MapGet("/api/watchlist", async (AppDbContext db, System.Security.Claims.ClaimsPrincipal user) =>
 {
-    return await db.WatchlistEntry.Include(w => w.Anime).ToListAsync();
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var entries = await db.WatchlistEntry
+        .Include(w => w.Anime)
+        .Where(w => w.UserId == userId)
+        .ToListAsync();
+
+    return Results.Ok(entries);
 })
+.RequireAuthorization()
 .WithName("GetWatchlist");
 
-app.MapPost("/api/watchlist", async (AppDbContext db, WatchlistEntry entry) =>
+app.MapPost("/api/watchlist", async (AppDbContext db, WatchlistEntry entry, System.Security.Claims.ClaimsPrincipal user) =>
 {
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
     var animeExists = await db.Anime.AnyAsync(a => a.Id == entry.AnimeId);
     if (!animeExists)
     {
         return Results.NotFound("Anime not found.");
     }
 
-    var existing = await db.WatchlistEntry.FirstOrDefaultAsync(w => w.AnimeId == entry.AnimeId);
+    var existing = await db.WatchlistEntry.FirstOrDefaultAsync(w => w.AnimeId == entry.AnimeId && w.UserId == userId);
     if (existing is not null)
     {
         existing.Status = entry.Status;
@@ -789,15 +913,23 @@ app.MapPost("/api/watchlist", async (AppDbContext db, WatchlistEntry entry) =>
         return Results.Ok(existing);
     }
 
+    entry.UserId = userId;
     db.WatchlistEntry.Add(entry);
     await db.SaveChangesAsync();
     return Results.Created($"/api/watchlist/{entry.Id}", entry);
 })
+.RequireAuthorization()
 .WithName("AddOrUpdateWatchlistEntry");
 
-app.MapDelete("/api/watchlist/{animeId}", async (AppDbContext db, int animeId) =>
+app.MapDelete("/api/watchlist/{animeId}", async (AppDbContext db, int animeId, System.Security.Claims.ClaimsPrincipal user) =>
 {
-    var entry = await db.WatchlistEntry.FirstOrDefaultAsync(w => w.AnimeId == animeId);
+    var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+    if (userId is null)
+    {
+        return Results.Unauthorized();
+    }
+
+    var entry = await db.WatchlistEntry.FirstOrDefaultAsync(w => w.AnimeId == animeId && w.UserId == userId);
     if (entry is null)
     {
         return Results.NotFound();
@@ -807,6 +939,7 @@ app.MapDelete("/api/watchlist/{animeId}", async (AppDbContext db, int animeId) =
     await db.SaveChangesAsync();
     return Results.NoContent();
 })
+.RequireAuthorization()
 .WithName("RemoveFromWatchlist");
 
 app.MapPost("/api/anime/import-one/{anilistId}", async (AppDbContext db, IHttpClientFactory httpClientFactory, int anilistId) =>
@@ -916,6 +1049,50 @@ app.MapPost("/api/anime/import-one/{anilistId}", async (AppDbContext db, IHttpCl
     return Results.Ok(anime);
 })
 .WithName("ImportSingleAnime");
+
+app.MapPost("/api/auth/register", async (UserManager<IdentityUser> userManager, RegisterRequest request) =>
+{
+    var user = new IdentityUser { UserName = request.Username, Email = request.Email };
+    var result = await userManager.CreateAsync(user, request.Password);
+
+    if (!result.Succeeded)
+    {
+        return Results.BadRequest(result.Errors.Select(e => e.Description));
+    }
+
+    return Results.Ok(new { message = "User created successfully." });
+})
+.WithName("Register");
+
+app.MapPost("/api/auth/login", async (UserManager<IdentityUser> userManager, LoginRequest request, IConfiguration config) =>
+{
+    var user = await userManager.FindByNameAsync(request.Username);
+    if (user is null || !await userManager.CheckPasswordAsync(user, request.Password))
+    {
+        return Results.Unauthorized();
+    }
+
+    var jwtKey = config["Jwt:Key"] ?? throw new InvalidOperationException("JWT key not configured.");
+    var securityKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtKey));
+    var credentials = new Microsoft.IdentityModel.Tokens.SigningCredentials(securityKey, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256);
+
+    var claims = new[]
+    {
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, user.Id),
+        new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, user.UserName ?? "")
+    };
+
+    var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+        claims: claims,
+        expires: DateTime.UtcNow.AddDays(7),
+        signingCredentials: credentials
+    );
+
+    var tokenString = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(token);
+
+    return Results.Ok(new { token = tokenString, username = user.UserName });
+})
+.WithName("Login");
 
 app.Run();
 

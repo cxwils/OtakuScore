@@ -6,5 +6,6 @@ namespace OtakuScore.api.Models
         public int AnimeId { get; set; }
         public Anime? Anime { get; set; }
         public string Status { get; set; } = "Watching";
+        public string? UserId { get; set; }
     }
 }

@@ -1,5 +1,7 @@
 ﻿import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useAuth } from './AuthContext.jsx';
+import { API_BASE_URL } from './config.js';
 
 const CATEGORIES = [
     { key: 'premise', label: 'Premise' },
@@ -37,15 +39,17 @@ function MangaDetail() {
 
     const [readingStatus, setReadingStatus] = useState(null);
     const [readingSaving, setReadingSaving] = useState(false);
+    const { token } = useAuth();
+    const [readingListError, setReadingListError] = useState(null);
 
     const loadData = () => {
         setLoading(true);
         Promise.all([
-            fetch(`http://localhost:5094/api/manga/${id}`).then((res) => {
+            fetch(`${API_BASE_URL}/api/manga/${id}`).then((res) => {
                 if (!res.ok) throw new Error('Manga not found');
                 return res.json();
             }),
-            fetch(`http://localhost:5094/api/manga/${id}/rating-summary`).then((res) => {
+            fetch(`${API_BASE_URL}/api/manga/${id}/rating-summary`).then((res) => {
                 if (!res.ok) throw new Error('Failed to load ratings');
                 return res.json();
             }),
@@ -71,6 +75,10 @@ function MangaDetail() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        if (!token) {
+            setSubmitError('You must be logged in to submit a rating.');
+            return;
+        }
         setSubmitting(true);
         setSubmitError(null);
         setSubmitSuccess(false);
@@ -88,9 +96,12 @@ function MangaDetail() {
             review: formData.review,
         };
 
-        fetch(`http://localhost:5094/api/manga/${id}/ratings`, {
+        fetch(`${API_BASE_URL}/api/manga/${id}/ratings`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify(payload),
         })
             .then((res) => {
@@ -110,10 +121,17 @@ function MangaDetail() {
     };
 
     const handleAddToReadingList = (status) => {
+        if (!token) {
+            setReadingListError('You must be logged in to do that.');
+            return;
+        }
         setReadingSaving(true);
-        fetch('http://localhost:5094/api/readinglist', {
+        fetch(`${API_BASE_URL}/api/readinglist`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify({ id: 0, mangaId: Number(id), status }),
         })
             .then((res) => {
@@ -124,8 +142,13 @@ function MangaDetail() {
                 setReadingStatus(data.status);
                 setReadingSaving(false);
             })
-            .catch(() => setReadingSaving(false));
+            .catch((err) => {
+                setReadingListError(err.message);
+                setReadingSaving(false);
+            });
     };
+
+    if (loading) return <p className="status-message">Loading…</p>;
 
     if (loading) return <p className="status-message">Loading…</p>;
     if (error) return <p className="status-message error">Error: {error}</p>;
@@ -167,6 +190,7 @@ function MangaDetail() {
                             </button>
                         ))}
                     </div>
+                    {readingListError && <p className="status-message error">{readingListError}</p>}
 
                     <div className="metadata-row">
                         {manga.format && <span className="metadata-item">{manga.format}</span>}
