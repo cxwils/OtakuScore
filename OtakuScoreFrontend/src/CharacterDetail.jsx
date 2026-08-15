@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { API_BASE_URL } from './config.js';
 
 function CharacterDetail() {
     const { id } = useParams();
@@ -8,7 +9,7 @@ function CharacterDetail() {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        fetch(`http://localhost:5094/api/characters/${id}`)
+           fetch(`${API_BASE_URL}/api/characters/${id}`)
             .then((res) => {
                 if (!res.ok) throw new Error('Character not found');
                 return res.json();

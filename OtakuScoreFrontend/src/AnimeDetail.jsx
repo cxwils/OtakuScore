@@ -191,6 +191,7 @@ function AnimeDetail() {
                             </button>
                         ))}
                     </div>
+                    {watchlistError && <p className="status-message error">{watchlistError}</p>}
                     <div className="metadata-row">
                         {anime.format && <span className="metadata-item">{anime.format}</span>}
                         {anime.episodes && <span className="metadata-item">{anime.episodes} episodes</span>}
