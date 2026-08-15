@@ -126,7 +126,7 @@ function AnimeDetail() {
     };
     const handleAddToWatchlist = (status) => {
         if (!token) {
-            setWatchlistError('You must be logged in to do that.');
+            setWatchlistError('You must be logged in to add to your watchlist.');
             return;
         }
         setWatchlistSaving(true);
