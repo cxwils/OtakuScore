@@ -1,30 +1,52 @@
 ﻿# Otaku Score
 
-A full-stack anime and manga rating platform built with ASP.NET Core, PostgreSQL, and React. Browse a searchable, filterable catalog of anime and manga, rate titles across 7-8 custom categories, explore cast and character pages, track your watchlist and reading list, and see what's trending — all backed by live data from the AniList GraphQL API.
+A full-stack anime and manga rating platform. Browse a searchable, filterable catalog of anime and manga, rate titles across a custom multi-category system, explore cast and character pages, track your watchlist and reading list, and see what's trending — all backed by real user accounts and live data from the AniList GraphQL API.
+
+**🔗 Live demo:** [otaku-score.vercel.app](https://otaku-score.vercel.app)
+**🔗 API:** [otakuscore-production.up.railway.app](https://otakuscore-production.up.railway.app)
 
 ## Tech Stack
 
 - **Backend:** ASP.NET Core Web API (.NET 9), C#
 - **Database:** PostgreSQL, Entity Framework Core (code-first migrations)
+- **Auth:** ASP.NET Core Identity + JWT bearer authentication
 - **Frontend:** React (Vite), React Router
 - **External Data:** AniList GraphQL API
+- **Hosting:** Railway (API + Postgres), Vercel (frontend)
 
 ## Features
 
+**Catalog & Discovery**
 - Full CRUD API for anime and manga, with rich metadata (format, episodes/chapters, duration, status, season, studio)
-- Category-based rating system for both anime (8 categories, including Animation) and manga (7 categories) with a computed overall score
-- Per-title rating summary endpoints with per-category and overall averages
-- Search, genre filtering, and sorting (rating/title, asc/desc) on both catalogs, with backend pagination
-- Cast and character data pulled from AniList, deduplicated across seasons/sequels, with individual character pages showing bio and every anime/manga appearance (cross-linked)
-- Automated data ingestion from AniList (bulk and single-title imports), with deduplication and HTML/markdown sanitization
-- Live "Hottest Anime of the Year" and "Anime of the Week" (trending) views queried directly from AniList
-- Separate Watchlist (anime) and Reading List (manga) with status tracking (Watching/Reading, Plan to Watch/Read, Completed, Dropped)
+- Search, genre filtering, and sorting (rating/title, ascending/descending) with backend pagination
+- Live "Hottest Anime of the Year" and "Anime of the Week" (trending) views, queried directly from AniList
 - Score-based color coding (green/gold/rose) on AniList community scores
+
+**Ratings**
+- Custom multi-category rating system — anime rated across 8 categories (Premise, Plot, Characters, Art Style, Animation, Pacing, Ending, Binge-ability), manga across 7 (no Animation) — with a computed overall score
+- Per-title rating summary endpoints with per-category and overall averages
+
+**Characters & Cast**
+- Cast and character data pulled from AniList, deduplicated across seasons and sequels
+- Individual character pages showing bio, voice actor, and every anime/manga appearance, cross-linked back to those titles
+
+**Accounts & Personalization**
+- Real user accounts (register/login) with JWT-based authentication
+- Per-user Watchlist (anime) and Reading List (manga) with status tracking (Watching/Reading, Plan to Watch/Read, Completed, Dropped)
+- Ratings, watchlist, and reading list are all scoped to the logged-in user
+
+**Data Pipeline**
+- Automated ingestion from AniList (bulk and single-title imports), with deduplication and HTML/markdown sanitization on descriptions
+- ~500 anime and ~500 manga titles imported, each with full metadata and cast
+
+**UI**
 - Light/dark theme toggle
-- Homepage hero section and persistent GitHub link
-- Interactive API documentation via Swagger UI
+- Homepage hero section
+- Interactive API documentation via Swagger UI (local/dev only)
 
 ## Getting Started
+
+The live demo is linked above — the steps below are for running the project locally.
 
 ### Prerequisites
 
@@ -39,12 +61,15 @@ cd OtakuScore.api
 dotnet restore
 ```
 
-Create `appsettings.Development.json` in `OtakuScore.api/` with your local connection string:
+Create `appsettings.Development.json` in `OtakuScore.api/` with your local connection string and a JWT signing key:
 
 ```json
 {
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Database=otakuscore;Username=postgres;Password=yourpassword"
+  },
+  "Jwt": {
+    "Key": "a-long-random-secret-string-at-least-32-characters"
   }
 }
 ```
@@ -66,6 +91,12 @@ npm install
 npm run dev
 ```
 
+Create a `.env` file in `OtakuScoreFrontend/` pointing at your local API:
+
+```
+VITE_API_URL=http://localhost:5094
+```
+
 The site will be available at `http://localhost:5173`.
 
 ### Seeding Data
@@ -81,6 +112,8 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 
 ### API Endpoints
 
+**Anime**
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/anime` | List anime (supports `page`, `pageSize`, `search`, `genre`, `sort`) |
@@ -93,22 +126,54 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 | GET | `/api/anime/hottest` | Top 25 anime of the current year, live from AniList |
 | GET | `/api/anime/trending` | Top 25 trending anime this week, live from AniList |
 | GET | `/api/anime/{animeId}/ratings` | Get ratings for an anime |
-| POST | `/api/anime/{animeId}/ratings` | Submit a category rating |
+| POST 🔒 | `/api/anime/{animeId}/ratings` | Submit a category rating |
 | GET | `/api/anime/{animeId}/rating-summary` | Get per-category and overall average scores |
+
+**Manga**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/manga` | List manga (supports `page`, `pageSize`, `search`, `genre`, `sort`) |
 | GET | `/api/manga/{id}` | Get a single manga by ID, including cast |
 | POST | `/api/manga/import` | Bulk import manga from AniList (`pages`, `perPage`) |
 | GET | `/api/manga/{mangaId}/ratings` | Get ratings for a manga |
-| POST | `/api/manga/{mangaId}/ratings` | Submit a category rating |
+| POST 🔒 | `/api/manga/{mangaId}/ratings` | Submit a category rating |
 | GET | `/api/manga/{mangaId}/rating-summary` | Get per-category and overall average scores |
+
+**Characters**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/characters` | List unique characters (supports `page`, `pageSize`, `search`) |
 | GET | `/api/characters/{aniListCharacterId}` | Get a character's bio and all anime/manga appearances |
-| GET | `/api/watchlist` | Get the current anime watchlist |
-| POST | `/api/watchlist` | Add or update a watchlist entry |
-| DELETE | `/api/watchlist/{animeId}` | Remove an anime from the watchlist |
-| GET | `/api/readinglist` | Get the current manga reading list |
-| POST | `/api/readinglist` | Add or update a reading list entry |
-| DELETE | `/api/readinglist/{mangaId}` | Remove a manga from the reading list |
+
+**Watchlist & Reading List** (🔒 auth required, scoped to the logged-in user)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET 🔒 | `/api/watchlist` | Get your anime watchlist |
+| POST 🔒 | `/api/watchlist` | Add or update a watchlist entry |
+| DELETE 🔒 | `/api/watchlist/{animeId}` | Remove an anime from your watchlist |
+| GET 🔒 | `/api/readinglist` | Get your manga reading list |
+| POST 🔒 | `/api/readinglist` | Add or update a reading list entry |
+| DELETE 🔒 | `/api/readinglist/{mangaId}` | Remove a manga from your reading list |
+
+**Auth**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Create a new account |
+| POST | `/api/auth/login` | Log in and receive a JWT |
+
+## Deployment
+
+- **API + Database:** Railway (ASP.NET Core service + managed PostgreSQL)
+- **Frontend:** Vercel (Vite build, served as a static site)
+- Environment-specific config (connection strings, JWT signing key, allowed CORS origins) is injected via environment variables in both platforms — nothing sensitive is committed to the repo.
+
+## Project Status
+
+🚧 In active development.
 
 ## Author
 

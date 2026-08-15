@@ -80,7 +80,7 @@ function AuthPage() {
                     </div>
 
                     <button type="submit" className="submit-button" disabled={submitting}>
-                        {submitting ? 'Please wait...' : isRegister ? 'Create Account' : 'Log In'}
+                        {submitting ? 'Please wait...' : isRegister ? 'Create Account' : 'Log In'}Select-String -Path "AuthPage.jsx" -Pattern "[^\x00-\x7F]"
                     </button>
 
                     {error && <p className="status-message error">{error}</p>}
