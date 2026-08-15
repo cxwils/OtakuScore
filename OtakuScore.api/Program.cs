@@ -61,12 +61,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
 {
     options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 6;
-    options.Password.RequireNonAlphanumeric = false;
-    options.Password.RequireUppercase = false;
+    options.Password.RequiredLength = 8;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireLowercase = true;
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
+builder.Services.AddScoped<SignInManager<IdentityUser>>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT key not configured.");
@@ -1122,11 +1126,21 @@ app.MapPost("/api/auth/register", async (UserManager<IdentityUser> userManager, 
 })
 .WithName("Register");
 
-app.MapPost("/api/auth/login", async (UserManager<IdentityUser> userManager, LoginRequest request, IConfiguration config) =>
+app.MapPost("/api/auth/login", async (UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager, LoginRequest request, IConfiguration config) =>
 {
     var user = await userManager.FindByNameAsync(request.Username);
-    if (user is null || !await userManager.CheckPasswordAsync(user, request.Password))
+    if (user is null)
     {
+        return Results.Unauthorized();
+    }
+
+    var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+    if (!result.Succeeded)
+    {
+        if (result.IsLockedOut)
+        {
+            return Results.Json(new { error = "Account locked due to too many failed attempts. Try again in 15 minutes." }, statusCode: 423);
+        }
         return Results.Unauthorized();
     }
 
