@@ -122,7 +122,7 @@ function MangaDetail() {
 
     const handleAddToReadingList = (status) => {
         if (!token) {
-            setReadingListError('You must be logged in to add to your watchlist.');
+            setReadingListError('You must be logged in to add to your reading list.');
             return;
         }
         setReadingSaving(true);
