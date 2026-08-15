@@ -352,7 +352,7 @@ function App() {
                                         </p>
                                     </div>
                                     <h2 className="section-heading">Hottest Anime of the Year</h2>
-                                    {hottestLoading && <p className="status-message">Loading library…</p>}
+                                    {hottestLoading && <p className="status-message">Loading library</p>}
                                     {hottestError && <p className="status-message error">Error: {hottestError}</p>}
                                     {!hottestLoading && !hottestError && (
 
@@ -376,7 +376,7 @@ function App() {
                                                                     borderColor: getScoreColor(anime.aniListScore),
                                                                 }}
                                                             >
-                                                                {anime.aniListScore ?? '—'}
+                                                                {anime.aniListScore ?? '-'}
                                                             </span>
                                                         </div>
                                                         <p className="genre-tag">{anime.genre}</p>
@@ -391,7 +391,7 @@ function App() {
 
                             {activeTab === 'Anime' && (
                                 <>
-                                    {loading && <p className="status-message">Loading library…</p>}
+                                    {loading && <p className="status-message">Loading library</p>}
                                     {error && <p className="status-message error">Error: {error}</p>}
                                     {!loading && !error && (
                                         <>
@@ -451,7 +451,7 @@ function App() {
                                                                         borderColor: getScoreColor(anime.aniListScore),
                                                                     }}
                                                                 >
-                                                                    {anime.aniListScore ?? '—'}
+                                                                    {anime.aniListScore ?? '-'}
                                                                 </span>
                                                             </div>
                                                             <p className="genre-tag">{anime.genre}</p>
@@ -486,7 +486,7 @@ function App() {
                             {activeTab === 'My List' && (
                                 <>
                                     <h2 className="section-heading">Watchlist</h2>
-                                    {watchlistLoading && <p className="status-message">Loading your list…</p>}
+                                    {watchlistLoading && <p className="status-message">Loading your list</p>}
                                     {watchlistError && <p className="status-message error">Error: {watchlistError}</p>}
                                     {!watchlistLoading && !watchlistError && watchlist.length === 0 && (
                                         <p className="status-message">Your watchlist is empty! Add anime from their detail page.</p>
@@ -520,7 +520,7 @@ function App() {
                                     )}
 
                                     <h2 className="section-heading" style={{ marginTop: '48px' }}>Reading List</h2>
-                                    {readingListLoading && <p className="status-message">Loading your list…</p>}
+                                    {readingListLoading && <p className="status-message">Loading your list</p>}
                                     {readingListError && <p className="status-message error">Error: {readingListError}</p>}
                                     {!readingListLoading && !readingListError && readingList.length === 0 && (
                                         <p className="status-message">Your reading list is empty! Add manga from their detail page.</p>
@@ -598,7 +598,7 @@ function App() {
                                         </select>
                                     </div>
 
-                                    {mangaLoading && <p className="status-message">Loading library…</p>}
+                                    {mangaLoading && <p className="status-message">Loading library</p>}
                                     {mangaError && <p className="status-message error">Error: {mangaError}</p>}
                                     {!mangaLoading && !mangaError && (
                                         <>
@@ -618,7 +618,7 @@ function App() {
                                                                         borderColor: getScoreColor(manga.aniListScore),
                                                                     }}
                                                                 >
-                                                                    {manga.aniListScore ?? '—'}
+                                                                    {manga.aniListScore ?? '-'}
                                                                 </span>
                                                             </div>
                                                             <p className="genre-tag">{manga.genre}</p>
@@ -662,7 +662,7 @@ function App() {
                                         />
                                     </div>
 
-                                    {characterLoading && <p className="status-message">Loading characters…</p>}
+                                    {characterLoading && <p className="status-message">Loading characters</p>}
                                     {characterError && <p className="status-message error">Error: {characterError}</p>}
                                     {!characterLoading && !characterError && (
                                         <>
@@ -735,7 +735,7 @@ function App() {
                                                                     borderColor: getScoreColor(anime.aniListScore),
                                                                 }}
                                                             >
-                                                                {anime.aniListScore ?? '—'}
+                                                                {anime.aniListScore ?? '-'}
                                                             </span>
                                                         </div>
                                                         <p className="genre-tag">{anime.genre}</p>
