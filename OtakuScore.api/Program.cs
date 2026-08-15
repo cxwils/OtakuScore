@@ -647,6 +647,31 @@ app.MapGet("/api/manga/{mangaId}/rating-summary", async (AppDbContext db, int ma
 })
 .WithName("GetMangaRatingSummary");
 
+app.MapGet("/api/manga/{mangaId}/reviews", async (AppDbContext db, int mangaId) =>
+{
+    var reviews = await db.MangaRating
+        .Where(r => r.MangaId == mangaId && r.Review != null && r.Review != "")
+        .OrderByDescending(r => r.Id)
+        .Select(r => new
+        {
+            r.Id,
+            r.Review,
+            r.OverallScore,
+            r.Premise,
+            r.Plot,
+            r.Characters,
+            r.ArtStyle,
+            r.Pacing,
+            r.Ending,
+            r.BingeAbility
+        })
+        .ToListAsync();
+
+    return Results.Ok(reviews);
+})
+.WithName("GetMangaReviews");
+
+
 app.MapGet("/api/readinglist", async (AppDbContext db, System.Security.Claims.ClaimsPrincipal user) =>
 {
     var userId = user.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
@@ -778,6 +803,31 @@ app.MapGet("/api/anime/{animeId}/rating-summary", async (AppDbContext db, int an
     return Results.Ok(summary);
 })
 .WithName("GetRatingSummary");
+
+app.MapGet("/api/anime/{animeId}/reviews", async (AppDbContext db, int animeId) =>
+{
+    var reviews = await db.Rating
+        .Where(r => r.AnimeId == animeId && r.Review != null && r.Review != "")
+        .OrderByDescending(r => r.Id)
+        .Select(r => new
+        {
+            r.Id,
+            r.Review,
+            r.OverallScore,
+            r.Premise,
+            r.Plot,
+            r.Characters,
+            r.ArtStyle,
+            r.Animation,
+            r.Pacing,
+            r.Ending,
+            r.BingeAbility
+        })
+        .ToListAsync();
+
+    return Results.Ok(reviews);
+})
+.WithName("GetAnimeReviews");
 
 app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
 {

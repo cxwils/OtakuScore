@@ -24,6 +24,13 @@ function getScoreColor(score) {
     if (score >= 60) return '#E3A857';
     return '#C1495A';
 }
+
+function getUserScoreColor(score) {
+    if (score === null || score === undefined) return 'var(--text-dim)';
+    if (score >= 8) return '#6FCF97';
+    if (score >= 6) return '#E3A857';
+    return '#C1495A';
+}
 function MangaDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -42,6 +49,8 @@ function MangaDetail() {
     const { token } = useAuth();
     const [readingListError, setReadingListError] = useState(null);
 
+    const [reviews, setReviews] = useState([]);
+
     const loadData = () => {
         setLoading(true);
         Promise.all([
@@ -53,10 +62,15 @@ function MangaDetail() {
                 if (!res.ok) throw new Error('Failed to load ratings');
                 return res.json();
             }),
+            fetch(`${API_BASE_URL}/api/manga/${id}/reviews`).then((res) => {
+                if (!res.ok) throw new Error('Failed to load reviews');
+                return res.json();
+            }),
         ])
-            .then(([mangaData, summaryData]) => {
+            .then(([mangaData, summaryData, reviewsData]) => {
                 setManga(mangaData);
                 setSummary(summaryData);
+                setReviews(reviewsData);
                 setLoading(false);
             })
             .catch((err) => {
@@ -221,6 +235,27 @@ function MangaDetail() {
                                 <li>Binge-ability <span>{summary.averageBingeAbility}</span></li>
                             </ul>
                         </div>
+                    )}
+                    {reviews.length > 0 && (
+                        <>
+                            <h2 className="section-heading">Reviews</h2>
+                            <div className="reviews-list">
+                                {reviews.map((review) => (
+                                    <div className="review-card" key={review.id}>
+                                        <div
+                                            className="review-score"
+                                            style={{
+                                                color: getUserScoreColor(review.overallScore),
+                                                borderColor: getUserScoreColor(review.overallScore),
+                                            }}
+                                        >
+                                            {review.overallScore}
+                                        </div>
+                                        <p className="review-text">{review.review}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     )}
                     {manga.mangaCastMembers && manga.mangaCastMembers.length > 0 && (
                         <>
