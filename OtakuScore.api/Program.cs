@@ -806,7 +806,10 @@ app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
     };
 
     var httpResponse = await client.PostAsJsonAsync("", requestBody);
-    httpResponse.EnsureSuccessStatusCode();
+    if (!httpResponse.IsSuccessStatusCode)
+    {
+        return Results.Problem("AniList is temporarily unavailable. Please try again shortly.", statusCode: 503);
+    }
 
     var response = await httpResponse.Content.ReadFromJsonAsync<AniListResponse>();
 
@@ -851,7 +854,10 @@ app.MapGet("/api/anime/trending", async (IHttpClientFactory httpClientFactory) =
 
     var requestBody = new { query };
     var httpResponse = await client.PostAsJsonAsync("", requestBody);
-    httpResponse.EnsureSuccessStatusCode();
+    if (!httpResponse.IsSuccessStatusCode)
+    {
+        return Results.Problem("AniList is temporarily unavailable. Please try again shortly.", statusCode: 503);
+    }
 
     var response = await httpResponse.Content.ReadFromJsonAsync<AniListResponse>();
 
