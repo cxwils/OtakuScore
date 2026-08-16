@@ -4,10 +4,28 @@ using OtakuScore.api.Models;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
+using System.Security.Cryptography;
 
 static string StripHtml(string input)
 {
     return System.Text.RegularExpressions.Regex.Replace(input, "<.*?>", " ").Trim();
+}
+
+static async Task SendOtpEmailAsync(IConfiguration config, string toEmail, string code)
+{
+    var apiKey = config["SendGrid:ApiKey"] ?? throw new InvalidOperationException("SendGrid API key not configured.");
+    var fromEmail = config["SendGrid:FromEmail"] ?? throw new InvalidOperationException("SendGrid from email not configured.");
+    var fromName = config["SendGrid:FromName"] ?? "OtakuScore";
+
+    var client = new SendGrid.SendGridClient(apiKey);
+    var from = new SendGrid.Helpers.Mail.EmailAddress(fromEmail, fromName);
+    var to = new SendGrid.Helpers.Mail.EmailAddress(toEmail);
+    var subject = "Your OtakuScore verification code";
+    var plainTextContent = $"Your verification code is: {code}\n\nThis code expires in 10 minutes.\n\nDon't see this in your inbox? Check your spam or junk folder.";
+    var htmlContent = $"<p>Your verification code is: <strong>{code}</strong></p><p>This code expires in 10 minutes.</p><p style=\"color: #666; font-size: 13px;\">Don't see this in your inbox? Check your spam or junk folder.</p>";
+
+    var msg = SendGrid.Helpers.Mail.MailHelper.CreateSingleEmail(from, to, subject, plainTextContent, htmlContent);
+    await client.SendEmailAsync(msg);
 }
 
 static string CleanCharacterDescription(string input)
@@ -1112,19 +1130,84 @@ app.MapPost("/api/anime/import-one/{anilistId}", async (AppDbContext db, IHttpCl
 })
 .WithName("ImportSingleAnime");
 
-app.MapPost("/api/auth/register", async (UserManager<IdentityUser> userManager, RegisterRequest request) =>
+app.MapPost("/api/auth/register", async (UserManager<IdentityUser> userManager, AppDbContext db, IConfiguration config, RegisterRequest request) =>
 {
     var user = new IdentityUser { UserName = request.Username, Email = request.Email };
     var result = await userManager.CreateAsync(user, request.Password);
-
     if (!result.Succeeded)
     {
         return Results.BadRequest(result.Errors.Select(e => e.Description));
     }
 
-    return Results.Ok(new { message = "User created successfully." });
+    var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
+    db.EmailOtp.Add(new EmailOtp
+    {
+        UserId = user.Id,
+        Code = code,
+        ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+    });
+    await db.SaveChangesAsync();
+
+    await SendOtpEmailAsync(config, request.Email, code);
+
+    return Results.Ok(new { message = "Account created. Check your email for a verification code." });
 })
 .WithName("Register");
+
+app.MapPost("/api/auth/verify-email", async (UserManager<IdentityUser> userManager, AppDbContext db, VerifyEmailRequest request) =>
+{
+    var user = await userManager.FindByNameAsync(request.Username);
+    if (user is null)
+    {
+        return Results.BadRequest(new { error = "Invalid username." });
+    }
+
+    var otp = await db.EmailOtp
+        .Where(o => o.UserId == user.Id && o.Code == request.Code && !o.Used)
+        .OrderByDescending(o => o.Id)
+        .FirstOrDefaultAsync();
+
+    if (otp is null || otp.ExpiresAt < DateTime.UtcNow)
+    {
+        return Results.BadRequest(new { error = "Invalid or expired code." });
+    }
+
+    otp.Used = true;
+    user.EmailConfirmed = true;
+    await userManager.UpdateAsync(user);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { message = "Email verified successfully. You can now log in." });
+})
+.WithName("VerifyEmail");
+
+app.MapPost("/api/auth/resend-code", async (UserManager<IdentityUser> userManager, AppDbContext db, IConfiguration config, ResendCodeRequest request) =>
+{
+    var user = await userManager.FindByNameAsync(request.Username);
+    if (user is null || user.Email is null)
+    {
+        return Results.BadRequest(new { error = "Account not found." });
+    }
+
+    if (user.EmailConfirmed)
+    {
+        return Results.BadRequest(new { error = "This account is already verified." });
+    }
+
+    var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
+    db.EmailOtp.Add(new EmailOtp
+    {
+        UserId = user.Id,
+        Code = code,
+        ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+    });
+    await db.SaveChangesAsync();
+
+    await SendOtpEmailAsync(config, user.Email, code);
+
+    return Results.Ok(new { message = "A new code has been sent to your email." });
+})
+.WithName("ResendVerificationCode");
 
 app.MapPost("/api/auth/login", async (UserManager<IdentityUser> userManager, SignInManager<IdentityUser> signInManager, LoginRequest request, IConfiguration config) =>
 {
@@ -1142,6 +1225,10 @@ app.MapPost("/api/auth/login", async (UserManager<IdentityUser> userManager, Sig
             return Results.Json(new { error = "Account locked due to too many failed attempts. Try again in 15 minutes." }, statusCode: 423);
         }
         return Results.Unauthorized();
+    }
+    if (!user.EmailConfirmed)
+    {
+        return Results.Json(new { error = "Please verify your email before logging in." }, statusCode: 403);
     }
 
     var jwtKey = config["Jwt:Key"] ?? throw new InvalidOperationException("JWT key not configured.");

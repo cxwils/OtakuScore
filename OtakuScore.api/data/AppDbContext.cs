@@ -17,6 +17,7 @@ namespace OtakuScore.api.Data
         public DbSet<MangaRating> MangaRating { get; set; }
         public DbSet<ReadingListEntry> ReadingListEntry { get; set; }
         public DbSet<MangaCastMember> MangaCastMember { get; set; }
+        public DbSet<EmailOtp> EmailOtp { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

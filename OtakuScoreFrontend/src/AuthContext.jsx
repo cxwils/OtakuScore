@@ -31,7 +31,8 @@ export function AuthProvider({ children }) {
         });
 
         if (!res.ok) {
-            throw new Error('Invalid username or password.');
+            const data = await res.json().catch(() => null);
+            throw new Error(data?.error || 'Invalid username or password.');
         }
 
         const data = await res.json();
