@@ -70,6 +70,7 @@ function App() {
     };
 
     useEffect(() => {
+        const controller = new AbortController();
         const params = new URLSearchParams({
             page: animePage,
             pageSize: 25,
@@ -78,7 +79,7 @@ function App() {
         if (genreFilter) params.append('genre', genreFilter);
         if (sortOrder) params.append('sort', sortOrder);
 
-        fetch(`${API_BASE_URL}/api/anime?${params.toString()}`)
+        fetch(`${API_BASE_URL}/api/anime?${params.toString()}`, { signal: controller.signal })
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch anime');
                 return response.json();
@@ -89,9 +90,13 @@ function App() {
                 setLoading(false);
             })
             .catch((err) => {
-                setError(err.message);
-                setLoading(false);
+                if (err.name !== 'AbortError') {
+                    setError(err.message);
+                    setLoading(false);
+                }
             });
+
+        return () => controller.abort();
     }, [animePage, searchTerm, genreFilter, sortOrder]);
 
     useEffect(() => {
@@ -155,14 +160,16 @@ function App() {
             });
     }, [activeTab, token]);
 
+   
     useEffect(() => {
+        const controller = new AbortController();
         const params = new URLSearchParams({
             page: characterPage,
             pageSize: 32,
         });
         if (characterSearch) params.append('search', characterSearch);
 
-        fetch(`${API_BASE_URL}/api/characters?${params.toString()}`)
+        fetch(`${API_BASE_URL}/api/characters?${params.toString()}`, { signal: controller.signal })
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch characters');
                 return response.json();
@@ -173,15 +180,17 @@ function App() {
                 setCharacterLoading(false);
             })
             .catch((err) => {
-                setCharacterError(err.message);
-                setCharacterLoading(false);
+                if (err.name !== 'AbortError') {
+                    setCharacterError(err.message);
+                    setCharacterLoading(false);
+                }
             });
+
+        return () => controller.abort();
     }, [characterPage, characterSearch]);
-    useEffect(() => {
-        setCharacterPage(1);
-    }, [characterSearch]);
 
     useEffect(() => {
+        const controller = new AbortController();
         const params = new URLSearchParams({
             page: mangaPage,
             pageSize: 25,
@@ -190,7 +199,7 @@ function App() {
         if (mangaGenreFilter) params.append('genre', mangaGenreFilter);
         if (mangaSortOrder) params.append('sort', mangaSortOrder);
 
-        fetch(`${API_BASE_URL}/api/manga?${params.toString()}`)
+        fetch(`${API_BASE_URL}/api/manga?${params.toString()}`, { signal: controller.signal })
             .then((response) => {
                 if (!response.ok) throw new Error('Failed to fetch manga');
                 return response.json();
@@ -201,13 +210,14 @@ function App() {
                 setMangaLoading(false);
             })
             .catch((err) => {
-                setMangaError(err.message);
-                setMangaLoading(false);
+                if (err.name !== 'AbortError') {
+                    setMangaError(err.message);
+                    setMangaLoading(false);
+                }
             });
+
+        return () => controller.abort();
     }, [mangaPage, mangaSearch, mangaGenreFilter, mangaSortOrder]);
-    useEffect(() => {
-        setMangaPage(1);
-    }, [mangaSearch, mangaGenreFilter, mangaSortOrder]);
 
     useEffect(() => {
         if (!token) {
