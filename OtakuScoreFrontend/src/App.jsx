@@ -8,7 +8,7 @@ import AuthPage from './AuthPage.jsx';
 import { useAuth } from './AuthContext.jsx';
 import { API_BASE_URL } from './config.js';
 
-const TABS = ['Anime', 'Manga', 'Characters', 'Anime of the Week', 'My List'];
+const TABS = ['Anime', 'Manga', 'Characters', 'Anime of the Week', 'My List', 'About'];
 
 function App() {
     const navigate = useNavigate();
@@ -756,6 +756,32 @@ function App() {
                                         </div>
                                     )}
                                 </>
+                            )}
+                            {activeTab === 'About' && (
+                                <div className="about-page">
+                                    <h2 className="section-heading">What is Otaku Score?</h2>
+                                    <p className="detail-summary">
+                                        Otaku Score is a personal portfolio project I built to explore full-stack web development,
+                                        covering everything from database design and REST API architecture to authentication,
+                                        security, and cloud deployment. It's not affiliated with any commercial anime tracking service.
+                                    </p>
+
+                                    <h2 className="section-heading" style={{ marginTop: '32px' }}>Data & Attribution</h2>
+                                    <p className="detail-summary">
+                                        Anime and manga data, including titles, descriptions, cover art, scores, and character/cast
+                                        information, is provided by{' '}
+                                        <a href="https://anilist.co" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--gold)' }}>
+                                            AniList
+                                        </a>
+                                        {' '}via their public GraphQL API. Otaku Score is an independent, non-commercial student project
+                                        and is not affiliated with, endorsed by, or sponsored by AniList.
+                                    </p>
+
+                                    <h2 className="section-heading" style={{ marginTop: '32px' }}>Built With</h2>
+                                    <p className="detail-summary">
+                                        ASP.NET Core, PostgreSQL, React, and the AniList GraphQL API.
+                                    </p>
+                                </div>
                             )}
                         </>
                     } />
