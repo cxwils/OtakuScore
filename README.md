@@ -1,6 +1,6 @@
 ﻿# Otaku Score
 
-A full-stack anime and manga rating platform. Browse a searchable, filterable catalog of anime and manga, rate titles across a custom multi-category system, explore cast and character pages, track your watchlist and reading list, and see what's trending — all backed by real user accounts and live data from the AniList GraphQL API.
+A full-stack anime and manga rating platform. Browse a searchable, filterable catalog of anime and manga, rate titles across a custom multi-category system, read and leave reviews, explore cast and character pages, track your watchlist and reading list, and see what's trending — all backed by secure, email-verified user accounts and live data from the AniList GraphQL API.
 
 **🔗 Live demo:** [otaku-score.vercel.app](https://otaku-score.vercel.app)
 **🔗 API:** [otakuscore-production.up.railway.app](https://otakuscore-production.up.railway.app)
@@ -9,7 +9,8 @@ A full-stack anime and manga rating platform. Browse a searchable, filterable ca
 
 - **Backend:** ASP.NET Core Web API (.NET 9), C#
 - **Database:** PostgreSQL, Entity Framework Core (code-first migrations)
-- **Auth:** ASP.NET Core Identity + JWT bearer authentication
+- **Auth:** ASP.NET Core Identity + JWT bearer authentication, with email-based verification codes
+- **Email:** SendGrid
 - **Frontend:** React (Vite), React Router
 - **External Data:** AniList GraphQL API
 - **Hosting:** Railway (API + Postgres), Vercel (frontend)
@@ -19,21 +20,27 @@ A full-stack anime and manga rating platform. Browse a searchable, filterable ca
 **Catalog & Discovery**
 - Full CRUD API for anime and manga, with rich metadata (format, episodes/chapters, duration, status, season, studio)
 - Search, genre filtering, and sorting (rating/title, ascending/descending) with backend pagination
-- Live "Hottest Anime of the Year" and "Anime of the Week" (trending) views, queried directly from AniList
-- Score-based color coding (green/gold/rose) on AniList community scores
+- Live "Hottest Anime of the Year" and "Anime of the Week" (trending) views, queried directly from AniList, with graceful fallback if AniList is degraded or rate-limited
+- Score-based color coding (green/gold/rose) on both AniList community scores and user review scores
 
-**Ratings**
+**Ratings & Reviews**
 - Custom multi-category rating system — anime rated across 8 categories (Premise, Plot, Characters, Art Style, Animation, Pacing, Ending, Binge-ability), manga across 7 (no Animation) — with a computed overall score
 - Per-title rating summary endpoints with per-category and overall averages
+- Written reviews displayed on each anime/manga page, color-coded by score
 
 **Characters & Cast**
 - Cast and character data pulled from AniList, deduplicated across seasons and sequels
 - Individual character pages showing bio, voice actor, and every anime/manga appearance, cross-linked back to those titles
 
-**Accounts & Personalization**
-- Real user accounts (register/login) with JWT-based authentication
+**Accounts & Security**
+- Registration requires email verification via a 6-digit code (SendGrid), with resend support
+- Login blocked until email is verified
+- Strong password requirements (8+ characters, upper/lowercase, digit, symbol)
+- Account lockout after 5 failed login attempts (15-minute cooldown)
+- JWT-based authentication; Ratings, Watchlist, and Reading List are all scoped to the logged-in user
+
+**Personalization**
 - Per-user Watchlist (anime) and Reading List (manga) with status tracking (Watching/Reading, Plan to Watch/Read, Completed, Dropped)
-- Ratings, watchlist, and reading list are all scoped to the logged-in user
 
 **Data Pipeline**
 - Automated ingestion from AniList (bulk and single-title imports), with deduplication and HTML/markdown sanitization on descriptions
@@ -53,6 +60,7 @@ The live demo is linked above — the steps below are for running the project lo
 - [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
 - [PostgreSQL](https://www.postgresql.org/download/)
 - [Node.js](https://nodejs.org/) (for the frontend)
+- A [SendGrid](https://sendgrid.com) account (free tier) for sending verification emails
 
 ### Backend Setup
 
@@ -61,7 +69,7 @@ cd OtakuScore.api
 dotnet restore
 ```
 
-Create `appsettings.Development.json` in `OtakuScore.api/` with your local connection string and a JWT signing key:
+Create `appsettings.Development.json` in `OtakuScore.api/` with your local connection string, a JWT signing key, and SendGrid credentials:
 
 ```json
 {
@@ -70,6 +78,11 @@ Create `appsettings.Development.json` in `OtakuScore.api/` with your local conne
   },
   "Jwt": {
     "Key": "a-long-random-secret-string-at-least-32-characters"
+  },
+  "SendGrid": {
+    "ApiKey": "your-sendgrid-api-key",
+    "FromEmail": "your-verified-sender-email",
+    "FromName": "OtakuScore"
   }
 }
 ```
@@ -81,7 +94,7 @@ dotnet ef database update
 dotnet run
 ```
 
-The API will be available at `http://localhost:5094`, with Swagger UI at `http://localhost:5094/swagger`.
+The API will be available at `http://localhost:8080`, with Swagger UI at `http://localhost:8080/swagger`.
 
 ### Frontend Setup
 
@@ -94,7 +107,7 @@ npm run dev
 Create a `.env` file in `OtakuScoreFrontend/` pointing at your local API:
 
 ```
-VITE_API_URL=http://localhost:5094
+VITE_API_URL=http://localhost:8080
 ```
 
 The site will be available at `http://localhost:5173`.
@@ -128,6 +141,7 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 | GET | `/api/anime/{animeId}/ratings` | Get ratings for an anime |
 | POST 🔒 | `/api/anime/{animeId}/ratings` | Submit a category rating |
 | GET | `/api/anime/{animeId}/rating-summary` | Get per-category and overall average scores |
+| GET | `/api/anime/{animeId}/reviews` | Get written reviews for an anime |
 
 **Manga**
 
@@ -139,6 +153,7 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 | GET | `/api/manga/{mangaId}/ratings` | Get ratings for a manga |
 | POST 🔒 | `/api/manga/{mangaId}/ratings` | Submit a category rating |
 | GET | `/api/manga/{mangaId}/rating-summary` | Get per-category and overall average scores |
+| GET | `/api/manga/{mangaId}/reviews` | Get written reviews for a manga |
 
 **Characters**
 
@@ -162,14 +177,16 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/auth/register` | Create a new account |
-| POST | `/api/auth/login` | Log in and receive a JWT |
+| POST | `/api/auth/register` | Create a new account and send a verification email |
+| POST | `/api/auth/verify-email` | Confirm a 6-digit verification code |
+| POST | `/api/auth/resend-code` | Request a new verification code |
+| POST | `/api/auth/login` | Log in and receive a JWT (blocked until email is verified) |
 
 ## Deployment
 
 - **API + Database:** Railway (ASP.NET Core service + managed PostgreSQL)
 - **Frontend:** Vercel (Vite build, served as a static site)
-- Environment-specific config (connection strings, JWT signing key, allowed CORS origins) is injected via environment variables in both platforms — nothing sensitive is committed to the repo.
+- Environment-specific config (connection strings, JWT signing key, SendGrid credentials, allowed CORS origins) is injected via environment variables in both platforms — nothing sensitive is committed to the repo.
 
 ## Project Status
 
