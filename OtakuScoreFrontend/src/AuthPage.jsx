@@ -135,7 +135,7 @@ function AuthPage() {
                         </div>
 
                         <button type="submit" className="submit-button" disabled={submitting}>
-                            {submitting ? 'Verifying…' : 'Verify Email'}
+                            {submitting ? 'Verifying...' : 'Verify Email'}
                         </button>
 
                         {error && <p className="status-message error">{error}</p>}
