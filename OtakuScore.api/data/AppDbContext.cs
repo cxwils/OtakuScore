@@ -22,6 +22,7 @@ namespace OtakuScore.api.Data
         protected override void OnModelCreating(ModelBuilder builder)
         {
             base.OnModelCreating(builder);
+            builder.Entity<CastMember>().HasIndex(c => new { c.AniListCharacterId, c.Id });
         }
     }
 }

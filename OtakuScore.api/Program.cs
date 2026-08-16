@@ -185,37 +185,53 @@ app.MapGet("/api/anime", async (AppDbContext db, int page = 1, int pageSize = 25
 
 app.MapGet("/api/characters", async (AppDbContext db, int page = 1, int pageSize = 32, string? search = null) =>
 {
-    var query = db.CastMember.AsQueryable();
+    var searchPattern = string.IsNullOrWhiteSpace(search) ? null : $"%{search}%";
 
-    if (!string.IsNullOrWhiteSpace(search))
+    var countSql = @"
+    SELECT COUNT(*) AS ""Value"" FROM (
+        SELECT DISTINCT ON (""AniListCharacterId"") ""AniListCharacterId""
+        FROM ""CastMember""
+        WHERE (@search IS NULL OR ""CharacterName"" ILIKE @search OR ""VoiceActorName"" ILIKE @search)
+    ) sub";
+
+    var searchParam = new Npgsql.NpgsqlParameter("search", NpgsqlTypes.NpgsqlDbType.Text)
     {
-        query = query.Where(c =>
-            EF.Functions.ILike(c.CharacterName, $"%{search}%") ||
-            EF.Functions.ILike(c.VoiceActorName, $"%{search}%"));
-    }
+        Value = (object?)searchPattern ?? DBNull.Value
+    };
 
-    var allMatching = await query
-        .OrderBy(c => c.Id)
-        .ToListAsync();
+    var totalCount = await db.Database
+        .SqlQueryRaw<int>(countSql, searchParam)
+        .FirstAsync();
 
-    var deduped = allMatching
-        .GroupBy(c => c.AniListCharacterId)
-        .Select(g => g.First())
-        .ToList();
+    var dataSql = @"
+    SELECT * FROM (
+        SELECT DISTINCT ON (""AniListCharacterId"") *
+        FROM ""CastMember""
+        WHERE (@search::text IS NULL OR ""CharacterName"" ILIKE @search::text OR ""VoiceActorName"" ILIKE @search::text)
+        ORDER BY ""AniListCharacterId"", ""Id""
+    ) sub
+    ORDER BY ""Id""
+    LIMIT @pageSize OFFSET @offset";
 
-    var totalCount = deduped.Count;
+    var searchParam2 = new Npgsql.NpgsqlParameter("search", NpgsqlTypes.NpgsqlDbType.Text)
+    {
+        Value = (object?)searchPattern ?? DBNull.Value
+    };
 
-    var items = deduped
-        .Skip((page - 1) * pageSize)
-        .Take(pageSize)
-        .Select(c => new
+    var items = await db.CastMember
+        .FromSqlRaw(dataSql,
+            searchParam2,
+            new Npgsql.NpgsqlParameter("pageSize", pageSize),
+            new Npgsql.NpgsqlParameter("offset", (page - 1) * pageSize))
+        .AsNoTracking()
+            .Select(c => new
         {
             c.AniListCharacterId,
             c.CharacterName,
             c.CharacterImageUrl,
             c.VoiceActorName
         })
-        .ToList();
+        .ToListAsync();
 
     return Results.Ok(new
     {
