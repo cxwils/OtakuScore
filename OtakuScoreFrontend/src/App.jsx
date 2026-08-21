@@ -188,6 +188,9 @@ function App() {
 
         return () => controller.abort();
     }, [characterPage, characterSearch]);
+    useEffect(() => {
+        setCharacterPage(1);
+    }, [characterSearch]);
 
     useEffect(() => {
         const controller = new AbortController();
