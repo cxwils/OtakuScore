@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Caching.Memory;
 
 static string StripHtml(string input)
 {
@@ -89,6 +90,8 @@ builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
 builder.Services.AddScoped<SignInManager<IdentityUser>>();
+
+builder.Services.AddMemoryCache();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT key not configured.");
@@ -867,11 +870,15 @@ app.MapGet("/api/anime/{animeId}/reviews", async (AppDbContext db, int animeId) 
 })
 .WithName("GetAnimeReviews");
 
-app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
+app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory, IMemoryCache cache) =>
 {
+    if (cache.TryGetValue("hottest-anime", out object? cachedResult))
+    {
+        return Results.Ok(cachedResult);
+    }
+
     var client = httpClientFactory.CreateClient("AniList");
     var currentYear = DateTime.UtcNow.Year;
-
     var query = @"
     query ($year: Int) {
         Page(perPage: 25) {
@@ -917,12 +924,20 @@ app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory) =>
         popularity = item.Popularity
     });
 
-    return Results.Ok(hottestList);
+    var hottestListMaterialized = hottestList.ToList();
+    cache.Set("hottest-anime", hottestListMaterialized, TimeSpan.FromMinutes(30));
+
+    return Results.Ok(hottestListMaterialized);
 })
 .WithName("GetHottestAnimeOfYear");
 
-app.MapGet("/api/anime/trending", async (IHttpClientFactory httpClientFactory) =>
+app.MapGet("/api/anime/trending", async (IHttpClientFactory httpClientFactory, IMemoryCache cache) =>
 {
+    if (cache.TryGetValue("trending-anime", out object? cachedResult))
+    {
+        return Results.Ok(cachedResult);
+    }
+
     var client = httpClientFactory.CreateClient("AniList");
 
     var query = @"
@@ -965,7 +980,10 @@ app.MapGet("/api/anime/trending", async (IHttpClientFactory httpClientFactory) =
         popularity = item.Popularity
     });
 
-    return Results.Ok(trendingList);
+    var trendingListMaterialized = trendingList.ToList();
+    cache.Set("trending-anime", trendingListMaterialized, TimeSpan.FromMinutes(30));
+
+    return Results.Ok(trendingListMaterialized);
 })
 .WithName("GetTrendingAnime");
 

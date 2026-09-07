@@ -131,7 +131,7 @@
 }
 
     .status-message.error {
-        color: var(--rose);
+        color: #FFFFFF;
     }
 
 .theme-toggle {

@@ -105,7 +105,7 @@ function App() {
     useEffect(() => {
         fetch(`${API_BASE_URL}/api/anime/hottest`)
             .then((response) => {
-                if (!response.ok) throw new Error('Failed to fetch hottest anime');
+                if (!response.ok) throw new Error("9/7/26: AniList's API is currently experiencing heavy load and may be temporarily unavailable. Please check back later.");
                 return response.json();
             })
             .then((data) => {
@@ -120,7 +120,7 @@ function App() {
     useEffect(() => {
         fetch(`${API_BASE_URL}/api/anime/trending`)
             .then((response) => {
-                if (!response.ok) throw new Error('Failed to fetch trending anime');
+                if (!response.ok) throw new Error("9/7/26: AniList's API is currently experiencing heavy load and may be temporarily unavailable. Please check back later.");
                 return response.json();
             })
             .then((data) => {
@@ -366,7 +366,7 @@ function App() {
                                     </div>
                                     <h2 className="section-heading">Hottest Anime of the Year</h2>
                                     {hottestLoading && <p className="status-message">Loading library</p>}
-                                    {hottestError && <p className="status-message error">Error: {hottestError}</p>}
+                                    {hottestError && <p className="status-message error">{hottestError}</p>}
                                     {!hottestLoading && !hottestError && (
 
                                         <div className="anime-grid">
@@ -405,7 +405,7 @@ function App() {
                             {activeTab === 'Anime' && (
                                 <>
                                     {loading && <p className="status-message">Loading library</p>}
-                                    {error && <p className="status-message error">Error: {error}</p>}
+                                    {error && <p className="status-message error">{error}</p>}
                                     {!loading && !error && (
                                         <>
                                             <div className="filter-bar">
@@ -726,7 +726,7 @@ function App() {
                                 <>
                                     <h2 className="section-heading">Animes of the Week</h2>
                                     {trendingLoading && <p className="status-message">Loading library</p>}
-                                    {trendingError && <p className="status-message error">Error: {trendingError}</p>}
+                                    {trendingError && <p className="status-message error">{trendingError}</p>}
                                     {!trendingLoading && !trendingError && (
                                         <div className="anime-grid">
                                             {trendingList.map((anime) => (
