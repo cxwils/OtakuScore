@@ -5,6 +5,8 @@ A full-stack anime and manga rating platform. Browse a searchable, filterable ca
 **🔗 Live demo:** [otaku-score.vercel.app](https://otaku-score.vercel.app)
 **🔗 API:** [otakuscore-production.up.railway.app](https://otakuscore-production.up.railway.app)
 
+> Anime and manga data is provided by [AniList](https://anilist.co) via their public GraphQL API. This is an independent, non-commercial student portfolio project and is not affiliated with or endorsed by AniList.
+
 ## Tech Stack
 
 - **Backend:** ASP.NET Core Web API (.NET 9), C#
@@ -20,7 +22,9 @@ A full-stack anime and manga rating platform. Browse a searchable, filterable ca
 **Catalog & Discovery**
 - Full CRUD API for anime and manga, with rich metadata (format, episodes/chapters, duration, status, season, studio)
 - Search, genre filtering, and sorting (rating/title, ascending/descending) with backend pagination
-- Live "Hottest Anime of the Year" and "Anime of the Week" (trending) views, queried directly from AniList, with graceful fallback if AniList is degraded or rate-limited
+- Character search/pagination powered by a raw-SQL `DISTINCT ON` query with a supporting index, instead of in-memory deduplication, for fast lookups even as the character table grows
+- Live "Hottest Anime of the Year" and "Anime of the Week" (trending) views, queried from AniList and cached server-side for 30 minutes to reduce load and improve reliability
+- Graceful fallback messaging when AniList's API is degraded or rate-limited, rather than a raw error
 - Score-based color coding (green/gold/rose) on both AniList community scores and user review scores
 
 **Ratings & Reviews**
@@ -38,6 +42,7 @@ A full-stack anime and manga rating platform. Browse a searchable, filterable ca
 - Strong password requirements (8+ characters, upper/lowercase, digit, symbol)
 - Account lockout after 5 failed login attempts (15-minute cooldown)
 - JWT-based authentication; Ratings, Watchlist, and Reading List are all scoped to the logged-in user
+- Search requests use `AbortController` cleanup to prevent stale responses from overwriting newer ones during fast typing
 
 **Personalization**
 - Per-user Watchlist (anime) and Reading List (manga) with status tracking (Watching/Reading, Plan to Watch/Read, Completed, Dropped)
@@ -49,6 +54,7 @@ A full-stack anime and manga rating platform. Browse a searchable, filterable ca
 **UI**
 - Light/dark theme toggle
 - Homepage hero section
+- About page with project description and AniList attribution
 - Interactive API documentation via Swagger UI (local/dev only)
 
 ## Getting Started
@@ -121,7 +127,7 @@ POST /api/anime/import?pages=10&perPage=50
 POST /api/manga/import?pages=10&perPage=50
 ```
 
-This pulls the most popular titles (with metadata, cast, and characters) into your local database. Adjust `pages`/`perPage` to control how many titles are imported.
+This pulls the most popular titles (with metadata, cast, and characters) into your local database. Adjust `pages`/`perPage` to control how many titles are imported. Please import responsibly — AniList's public API has limited capacity and this project uses it in compliance with their [Terms of Use](https://docs.anilist.co/guide/terms-of-use).
 
 ### API Endpoints
 
@@ -136,8 +142,8 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 | DELETE | `/api/anime/{id}` | Delete an anime |
 | POST | `/api/anime/import` | Bulk import anime from AniList (`pages`, `perPage`) |
 | POST | `/api/anime/import-one/{anilistId}` | Import a single anime from AniList |
-| GET | `/api/anime/hottest` | Top 25 anime of the current year, live from AniList |
-| GET | `/api/anime/trending` | Top 25 trending anime this week, live from AniList |
+| GET | `/api/anime/hottest` | Top 25 anime of the current year, live from AniList (cached 30 min) |
+| GET | `/api/anime/trending` | Top 25 trending anime this week, live from AniList (cached 30 min) |
 | GET | `/api/anime/{animeId}/ratings` | Get ratings for an anime |
 | POST 🔒 | `/api/anime/{animeId}/ratings` | Submit a category rating |
 | GET | `/api/anime/{animeId}/rating-summary` | Get per-category and overall average scores |
@@ -159,7 +165,7 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/characters` | List unique characters (supports `page`, `pageSize`, `search`) |
+| GET | `/api/characters` | List unique characters, deduplicated via `DISTINCT ON` (supports `page`, `pageSize`, `search`) |
 | GET | `/api/characters/{aniListCharacterId}` | Get a character's bio and all anime/manga appearances |
 
 **Watchlist & Reading List** (🔒 auth required, scoped to the logged-in user)
@@ -187,6 +193,13 @@ This pulls the most popular titles (with metadata, cast, and characters) into yo
 - **API + Database:** Railway (ASP.NET Core service + managed PostgreSQL)
 - **Frontend:** Vercel (Vite build, served as a static site)
 - Environment-specific config (connection strings, JWT signing key, SendGrid credentials, allowed CORS origins) is injected via environment variables in both platforms — nothing sensitive is committed to the repo.
+
+## A Note on External Dependency Reliability
+
+This project relies on AniList's free public API for anime/manga metadata. AniList has publicly acknowledged experiencing significant infrastructure strain due to rapid growth in third-party API traffic. To be a good API citizen and to keep the site usable during AniList slowdowns, this project:
+- Caches AniList responses server-side (30 minutes) to reduce request volume
+- Fails gracefully with a clear message instead of crashing when AniList is unavailable
+- Stores its core catalog in its own database, so browsing, ratings, and watchlists are unaffected by AniList's live-API status
 
 ## Project Status
 
