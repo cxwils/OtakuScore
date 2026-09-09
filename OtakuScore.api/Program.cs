@@ -878,7 +878,7 @@ app.MapGet("/api/anime/hottest", async (AppDbContext db) =>
     var hottest = await db.Anime
         .Where(a => a.SeasonYear >= minYear)
         .OrderByDescending(a => a.Popularity)
-        .Take(25)dotn
+        .Take(25)
         .Select(a => new
         {
             id = a.Id,
