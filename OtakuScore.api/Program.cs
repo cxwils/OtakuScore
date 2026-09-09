@@ -870,64 +870,28 @@ app.MapGet("/api/anime/{animeId}/reviews", async (AppDbContext db, int animeId) 
 })
 .WithName("GetAnimeReviews");
 
-app.MapGet("/api/anime/hottest", async (IHttpClientFactory httpClientFactory, IMemoryCache cache) =>
+app.MapGet("/api/anime/hottest", async (AppDbContext db) =>
 {
-    if (cache.TryGetValue("hottest-anime", out object? cachedResult))
-    {
-        return Results.Ok(cachedResult);
-    }
-
-    var client = httpClientFactory.CreateClient("AniList");
     var currentYear = DateTime.UtcNow.Year;
-    var query = @"
-    query ($year: Int) {
-        Page(perPage: 25) {
-            media(type: ANIME, seasonYear: $year, sort: POPULARITY_DESC) {
-                id
-                title { romaji }
-                description
-                genres
-                coverImage { large }
-                averageScore
-                popularity
-            }
-        }
-    }";
+    var minYear = currentYear - 1;
 
-    var requestBody = new
-    {
-        query,
-        variables = new { year = currentYear }
-    };
+    var hottest = await db.Anime
+        .Where(a => a.SeasonYear >= minYear)
+        .OrderByDescending(a => a.Popularity)
+        .Take(25)dotn
+        .Select(a => new
+        {
+            id = a.Id,
+            title = a.Title,
+            genre = a.Genre,
+            summary = a.Summary,
+            imageUrl = a.ImageUrl,
+            aniListScore = a.AniListScore,
+            popularity = a.Popularity
+        })
+        .ToListAsync();
 
-    var httpResponse = await client.PostAsJsonAsync("", requestBody);
-    if (!httpResponse.IsSuccessStatusCode)
-    {
-        return Results.Problem("AniList is temporarily unavailable. Please try again shortly.", statusCode: 503);
-    }
-
-    var response = await httpResponse.Content.ReadFromJsonAsync<AniListResponse>();
-
-    if (response is null)
-    {
-        return Results.Problem("No data returned from AniList.");
-    }
-
-    var hottestList = response.Data.Page.Media.Select(item => new
-    {
-        anilistId = item.Id,
-        title = item.Title.Romaji,
-        genre = string.Join(", ", item.Genres),
-        summary = item.Description != null ? StripHtml(item.Description) : "No summary available.",
-        imageUrl = item.CoverImage.Large,
-        aniListScore = item.AverageScore,
-        popularity = item.Popularity
-    });
-
-    var hottestListMaterialized = hottestList.ToList();
-    cache.Set("hottest-anime", hottestListMaterialized, TimeSpan.FromMinutes(30));
-
-    return Results.Ok(hottestListMaterialized);
+    return Results.Ok(hottest);
 })
 .WithName("GetHottestAnimeOfYear");
 

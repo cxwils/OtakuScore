@@ -102,21 +102,7 @@ function App() {
     useEffect(() => {
         setAnimePage(1);
     }, [searchTerm, genreFilter, sortOrder]);
-    useEffect(() => {
-        fetch(`${API_BASE_URL}/api/anime/hottest`)
-            .then((response) => {
-                if (!response.ok) throw new Error("9/7/26: AniList's API is currently experiencing heavy load and may be temporarily unavailable. Please check back later.");
-                return response.json();
-            })
-            .then((data) => {
-                setHottestList(data);
-                setHottestLoading(false);
-            })
-            .catch((err) => {
-                setHottestError(err.message);
-                setHottestLoading(false);
-            });
-    }, []);
+    
     useEffect(() => {
         fetch(`${API_BASE_URL}/api/anime/trending`)
             .then((response) => {
@@ -160,7 +146,22 @@ function App() {
             });
     }, [activeTab, token]);
 
-   
+    useEffect(() => {
+        fetch(`${API_BASE_URL}/api/anime/hottest`)
+            .then((response) => {
+                if (!response.ok) throw new Error('Failed to load hottest anime');
+                return response.json();
+            })
+            .then((data) => {
+                setHottestList(data);
+                setHottestLoading(false);
+            })
+            .catch((err) => {
+                setHottestError(err.message);
+                setHottestLoading(false);
+            });
+    }, []);
+
     useEffect(() => {
         const controller = new AbortController();
         const params = new URLSearchParams({
@@ -371,11 +372,7 @@ function App() {
 
                                         <div className="anime-grid">
                                             {hottestList.map((anime) => (
-                                                <div
-                                                    key={anime.anilistId}
-                                                    className="card-link"
-                                                    onClick={() => handleHottestClick(anime.anilistId)}
-                                                >
+                                                <Link to={`/anime/${anime.id}`} key={anime.id} className="card-link">
                                                     <article className="anime-card">
                                                         {anime.imageUrl && (
                                                             <img src={anime.imageUrl} alt={anime.title} className="anime-poster" />
@@ -395,7 +392,7 @@ function App() {
                                                         <p className="genre-tag">{anime.genre}</p>
                                                         <p className="summary">{anime.summary}</p>
                                                     </article>
-                                                </div>
+                                                </Link>
                                             ))}
                                         </div>
                                     )}
