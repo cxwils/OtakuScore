@@ -3,9 +3,6 @@
 A full-stack anime and manga rating platform. Browse a searchable, filterable catalog of anime and manga, rate titles across a custom multi-category system, read and leave reviews, explore cast and character pages, track your watchlist and reading list, and see what's trending — all backed by secure, email-verified user accounts and live data from the AniList GraphQL API.
 
 **🔗 Live demo:** [otaku-score.vercel.app](https://otaku-score.vercel.app)
-**🔗 API:** [otakuscore-production.up.railway.app](https://otakuscore-production.up.railway.app)
-
-> Anime and manga data is provided by [AniList](https://anilist.co) via their public GraphQL API. This is an independent, non-commercial student portfolio project and is not affiliated with or endorsed by AniList.
 
 ## Tech Stack
 
